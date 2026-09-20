@@ -499,25 +499,24 @@ body {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  background-color: #ffffff;
 }
 
 .roster-table {
   width: 100%;
-  height: 100%;
-  flex: 1 1 auto;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 10px;
 }
 
-.roster-table thead {
-  flex-shrink: 0;
+.moving-page .student-row {
+  height: var(--row-height, 16px);
 }
 
-.roster-table th,
-.roster-table td {
+.moving-page .student-row td {
+  height: var(--row-height, 16px);
   border: 1px solid #cbd5e1;
-  padding: 1.5px 3px;
+  padding: 1px 3px;
   text-align: center;
   color: #000000;
   vertical-align: middle;
@@ -1179,7 +1178,7 @@ body {
     height: 189mm !important;
     max-height: 189mm !important;
     min-height: 189mm !important;
-    padding: 0 !important;
+    padding: 0 2px 2px 0 !important; /* 2px right & bottom buffer against overflow:hidden clipping */
     margin: 0 !important;
     display: flex !important;
     flex-direction: column !important;
@@ -1201,6 +1200,7 @@ body {
     gap: 6px !important;
     height: 100% !important;
     min-height: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .moving-page.col-4 .period-columns-container {
@@ -1225,6 +1225,7 @@ body {
     min-height: 0 !important;
     border: 1px solid #000000 !important;
     box-sizing: border-box !important;
+    background-color: #ffffff !important;
   }
 
   .moving-page .period-col-header {
@@ -1254,12 +1255,12 @@ body {
     flex-direction: column !important;
     min-height: 0 !important;
     overflow: hidden !important;
+    background-color: #ffffff !important;
+    box-sizing: border-box !important;
   }
 
   .moving-page .roster-table {
     width: 100% !important;
-    height: 100% !important;
-    flex: 1 1 auto !important;
     border-collapse: collapse !important;
     table-layout: fixed !important;
     font-size: 8.5px !important;
@@ -1276,16 +1277,16 @@ body {
   }
 
   .moving-page .student-row {
-    height: auto !important; /* Distribute available height evenly across rows */
-    max-height: none !important;
+    height: var(--row-height, 16px) !important;
+    max-height: var(--row-height, 16px) !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
   .moving-page .student-row td {
-    padding: 1px 2px !important;
-    height: auto !important;
-    max-height: none !important;
+    padding: 0.5px 2px !important;
+    height: var(--row-height, 16px) !important;
+    max-height: var(--row-height, 16px) !important;
     font-size: 8.5px !important;
     line-height: 1.15 !important;
     vertical-align: middle !important;

@@ -54,10 +54,21 @@ export const MovingRollbookView = {
     const roomNum = roomName.replace('3-', '');
     const titleText = `[이동 ${roomNum}반 / ${escapeHtml(roomName)}교실]  ${escapeHtml(dayInfo.fullDisplayDate)} (${dayInfo.dayOfWeek}요일) 출석부`;
 
+    // Determine maximum student count on this page to set a uniform row height for all columns
+    const maxStudentsOnPage = Math.max(
+      ...rosters.map(r => (r.students ? r.students.length : 0)),
+      1
+    );
+
+    // Printable height = 189mm. Overhead (headers, footer, margins) = ~35mm.
+    // Available height for student rows = 154mm.
+    const targetMax = Math.max(maxStudentsOnPage, 25);
+    const rowHeightMm = (154.0 / targetMax).toFixed(2);
+
     const columnsHtml = rosters.map(roster => this.renderPeriodColumn(roster, dayInfo)).join('');
 
     return `
-      <div class="print-page a4-landscape moving-page col-${colCount}">
+      <div class="print-page a4-landscape moving-page col-${colCount}" style="--row-height: ${rowHeightMm}mm;">
         <div class="page-header">
           <div class="page-title-group">
             <h2 class="page-title">${titleText}</h2>
