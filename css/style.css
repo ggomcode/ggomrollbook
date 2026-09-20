@@ -729,7 +729,7 @@ body {
   border-right: 2px solid #000000 !important; /* 요일과 요일 구분선 (진한선) */
 }
 
-.day-group-header {
+.homeroom-table .day-group-header {
   border-bottom: 1px solid #000000 !important;
   border-right: 2px solid #000000 !important; /* 요일 헤더 구분선 (진한선) */
   font-size: 10px;
