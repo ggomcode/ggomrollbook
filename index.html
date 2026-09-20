@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ggomrollbook - 고등학교 출석부 및 급식 인원 캘린더 시스템</title>
+  <meta name="description" content="고등학교 3학년 선택교육과정 이동수업(1~12반) 및 원적학급(1~11반) A4 가로 정밀 인쇄 출석부, 행사및휴일 시간표 변동 자동화, 월별 예상 급식 캘린더 시스템">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header no-print">
+    <div class="brand-section">
+      <span class="brand-logo">📚</span>
+      <div>
+        <h1 class="brand-title">ggomrollbook</h1>
+      </div>
+      <span class="brand-badge">고3 출석부 & 급식</span>
+    </div>
+
+    <div class="header-actions">
+      <div id="syncStatus" class="status-badge status-live">
+        <span class="status-dot"></span>데이터 준비 중...
+      </div>
+      <button id="refreshBtn" class="icon-btn" title="구글 시트 실시간 데이터 새로고침">
+        <span class="refresh-icon">🔄</span> 시트 새로고침
+      </button>
+      <button id="printBtn" class="icon-btn print-btn-primary" title="A4 가로 정밀 인쇄">
+        <span>🖨️</span> 출석부 인쇄 (Ctrl+P)
+      </button>
+    </div>
+  </header>
+
+  <!-- App Navigation Tabs -->
+  <nav class="app-nav no-print" aria-label="출석부 메뉴">
+    <button class="nav-btn active" data-view="moving" id="navMovingBtn">
+      <span>🏫</span> 이동수업 출석부 (1~12반)
+    </button>
+    <button class="nav-btn" data-view="homeroom" id="navHomeroomBtn">
+      <span>📋</span> 원적학급 주간 출석부 (1~11반)
+    </button>
+    <button class="nav-btn" data-view="lunch" id="navLunchBtn">
+      <span>🍱</span> 월별 예상 급식 캘린더
+    </button>
+    <button class="nav-btn" data-view="finder" id="navFinderBtn">
+      <span>🔍</span> 학생·시간표 실시간 검색
+    </button>
+  </nav>
+
+  <!-- Dynamic Control Toolbar -->
+  <section class="app-toolbar no-print" id="toolbarControls">
+    <!-- Populated dynamically by app.js based on active view -->
+  </section>
+
+  <!-- Main Output Area (A4 Simulation & Print Canvas) -->
+  <main class="content-area" id="appOutput" role="main">
+    <!-- Populated dynamically by views -->
+  </main>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+    <div class="spinner"></div>
+    <div class="loading-text">구글 시트 데이터를 동기화하고 출석부를 생성하고 있습니다...</div>
+  </div>
+
+  <!-- Pre-cached offline fallback data -->
+  <script src="data/defaultData.js"></script>
+
+  <!-- Main App Module -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
