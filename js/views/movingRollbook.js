@@ -134,7 +134,7 @@ export const MovingRollbookView = {
     // Render student table rows (up to 35 rows)
     const students = roster.students || [];
     const rowsHtml = students.map((st, idx) => {
-      const status = RollbookModel.getStudentPeriodStatus(st, dayInfo.dayOfWeek, roster.periodNum);
+      const status = RollbookModel.getStudentPeriodStatus(st, dayInfo.dayOfWeek, roster.periodNum, dayInfo.dateStr);
       const is50Dark = status.is50Dark ? 'row-dark-50' : '';
       const is10Tint = (!status.is50Dark && status.isShaded) ? 'cell-tint-10' : '';
 

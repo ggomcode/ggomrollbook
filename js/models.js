@@ -9,6 +9,8 @@ export const AcademicConfig = {
   startWeekNum: 6,                          // 시작 주차
   endWeekNum: 21,                           // 종료 주차 (졸업식 포함)
   graduationDate: '2027-01-06',             // 졸업식 날짜
+  passStartDate: '2026-09-22',              // 파스(PASS) 운영 시작일 (화)
+  passEndDate: '2026-11-17',                // 파스(PASS) 운영 종료일 (화)
   allRooms: ['3-1','3-2','3-3','3-4','3-5','3-6','3-7','3-8','3-9','3-10','3-11','3-12'],
   allBans: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   periodsPerDay: { '월': 6, '화': 7, '수': 6, '목': 7, '금': 6 },
@@ -264,7 +266,7 @@ export const RollbookModel = {
    * Determine student's attendance cell mark and shading for a specific period:
    * Returns: { text: '', isShaded: boolean, is50Dark: boolean, isPresent: boolean }
    */
-  getStudentPeriodStatus(student, dayOfWeek, periodNum) {
+  getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null) {
     const pRemark = student.pRemark;
 
     // 1. 자퇴 / 위탁 / 전출 -> 50% dark shading for entire row, not present
@@ -277,9 +279,12 @@ export const RollbookModel = {
       return { text: '특', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
     }
 
-    // 3. 파스 -> '파' (10% tint)
-    if (pRemark.includes('파스')) {
-      return { text: '파', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
+    // 3. 파스 -> '파' (10% tint) - 9/22(화) ~ 11/17(화) 운영 기간 중에만 적용
+    if (pRemark.includes('파스') || pRemark.includes('패스')) {
+      const isPassActive = !dateStr || (dateStr >= AcademicConfig.passStartDate && dateStr <= AcademicConfig.passEndDate);
+      if (isPassActive) {
+        return { text: '파', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
+      }
     }
 
     // 4. 순회 -> '순' (10% tint)
@@ -437,7 +442,7 @@ export const RollbookModel = {
     };
 
     assignedStudents.forEach(st => {
-      const status = this.getStudentPeriodStatus(st, dayOfWeek, periodNum);
+      const status = this.getStudentPeriodStatus(st, dayOfWeek, periodNum, dateStr);
       if (status.isPresent) {
         expectedAttendance++;
       } else if (status.category && stats[status.category] !== undefined) {

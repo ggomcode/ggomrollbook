@@ -90,7 +90,7 @@ export const HomeroomRollbookView = {
             cellText = '-';
           } else if (p === '조' || p === '종') {
             // 조회/종례: show special student marks only, regular students get checkbox
-            const status = this._getSpecialMarkOnly(st);
+            const status = this._getSpecialMarkOnly(st, dayInfo.dateStr);
             cellText = status.text;
             isTint = status.isShaded && !isDarkRow;
           } else if (spec.day === '수' && (p === 5 || p === 6)) {
@@ -98,7 +98,7 @@ export const HomeroomRollbookView = {
             isTint = true;
           } else {
             const pNum = (typeof p === 'number') ? p : 0;
-            const status = RollbookModel.getStudentPeriodStatus(st, spec.day, pNum);
+            const status = RollbookModel.getStudentPeriodStatus(st, spec.day, pNum, dayInfo.dateStr);
             cellText = status.text;
             isTint = status.isShaded && !isDarkRow;
           }
@@ -175,13 +175,19 @@ export const HomeroomRollbookView = {
    * Get only the special mark (특/파/순/자퇴...) for 조/종 columns
    * without checking period-based attendance
    */
-  _getSpecialMarkOnly(student) {
+  _getSpecialMarkOnly(student, dateStr = null) {
     const pRemark = student.pRemark;
     if (pRemark.includes('자퇴') || pRemark.includes('위탁') || pRemark.includes('전출')) {
       return { text: pRemark, isShaded: true };
     }
     if (pRemark.includes('특수')) return { text: '특', isShaded: true };
-    if (pRemark.includes('파스')) return { text: '파', isShaded: true };
+    if (pRemark.includes('파스') || pRemark.includes('패스')) {
+      const isPassActive = !dateStr || (dateStr >= AcademicConfig.passStartDate && dateStr <= AcademicConfig.passEndDate);
+      if (isPassActive) {
+        return { text: '파', isShaded: true };
+      }
+      return { text: '', isShaded: false };
+    }
     if (pRemark.includes('순회')) return { text: '순', isShaded: true };
     return { text: '', isShaded: false };
   }
