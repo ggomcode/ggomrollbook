@@ -943,10 +943,12 @@ body {
     display: none !important;
   }
 
-  body {
+  html, body {
     background-color: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
   }
 
   .content-area {
@@ -954,17 +956,31 @@ body {
     margin: 0 !important;
     gap: 0 !important;
     display: block !important;
+    width: 100% !important;
   }
 
+  /* A4 Page Container: strictly contained within 1 sheet */
   .print-page {
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
-    height: 100% !important;
+    min-height: 0 !important; /* CRITICAL: Overrides screen min-height: 210mm which caused blank even pages */
+    max-height: 100% !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
     page-break-after: always !important;
     break-after: page !important;
+  }
+
+  /* Suppress page break on last page to avoid a trailing empty sheet */
+  .print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   /* Prevent row splitting across pages */
@@ -1009,6 +1025,89 @@ body {
     font-size: 9px;
     color: #94a3b8;
     font-weight: 400;
+  }
+
+  /* ========================================================================
+     HOMEROOM ROLLBOOK 1-PAGE PRECISION PRINT FIT
+     Ensures all 30~35 students + headers comfortably fit on a single A4 sheet
+     ======================================================================== */
+  .homeroom-page .page-header {
+    margin-bottom: 4px !important;
+    padding-bottom: 3px !important;
+  }
+
+  .homeroom-page .page-title {
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+  }
+
+  .homeroom-table-wrapper {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .homeroom-table {
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+  }
+
+  .homeroom-table th {
+    padding: 1.5px 1px !important;
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+  }
+
+  .homeroom-table th.period-sub-th {
+    font-size: 8px !important;
+    padding: 1px 0 !important;
+    height: 14px !important;
+  }
+
+  .homeroom-table th.day-group-header {
+    font-size: 9px !important;
+    padding: 1.5px 0 !important;
+    height: 15px !important;
+  }
+
+  .homeroom-student-row {
+    height: 14px !important;
+    max-height: 14.5px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .homeroom-student-row td {
+    padding: 0.5px 1px !important;
+    height: 14px !important;
+    line-height: 1.1 !important;
+    font-size: 8.5px !important;
+  }
+
+  .check-box-sm {
+    width: 8px !important;
+    height: 8px !important;
+  }
+
+  /* Moving Rollbook precision fit */
+  .moving-page .student-row td {
+    padding: 1px 2px !important;
+    height: 14px !important;
+    font-size: 8.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  .moving-page .roster-table th {
+    padding: 1.5px 2px !important;
+    font-size: 8.5px !important;
+  }
+
+  .moving-page .period-col-header {
+    padding: 2px 4px !important;
+  }
+
+  .moving-page .page-header {
+    margin-bottom: 4px !important;
+    padding-bottom: 3px !important;
   }
 }
 
