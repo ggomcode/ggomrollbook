@@ -372,8 +372,14 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
+  box-sizing: border-box;
   page-break-after: always;
   break-after: page;
+}
+
+/* Moving Rollbook full height on screen */
+.moving-page {
+  height: 210mm;
 }
 
 /* Page Header */
@@ -422,16 +428,25 @@ body {
 .period-columns-container {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr;
   gap: 8px;
   flex: 1;
+  min-height: 0;
+}
+
+.col-4 .period-columns-container {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr;
 }
 
 .col-3 .period-columns-container {
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr;
 }
 
 .col-2 .period-columns-container {
   grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr;
 }
 
 .period-column {
@@ -439,12 +454,15 @@ body {
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
+  height: 100%;
+  min-height: 0;
 }
 
 .period-col-header {
   background-color: #f1f5f9;
   border-bottom: 1px solid #000000;
   padding: 4px 6px;
+  flex-shrink: 0;
 }
 
 .period-col-top {
@@ -477,21 +495,32 @@ body {
 
 .table-wrapper {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
 .roster-table {
   width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
   border-collapse: collapse;
-  font-size: 10.5px;
+  table-layout: fixed;
+  font-size: 10px;
+}
+
+.roster-table thead {
+  flex-shrink: 0;
 }
 
 .roster-table th,
 .roster-table td {
   border: 1px solid #cbd5e1;
-  padding: 2.2px 3px;
+  padding: 1.5px 3px;
   text-align: center;
   color: #000000;
+  vertical-align: middle;
 }
 
 .roster-table th {
@@ -1145,22 +1174,62 @@ body {
     border-right: 2px solid #000000 !important;
   }
 
-  /* Moving Rollbook precision fit (A4 Landscape 1-Page Exact Fit) */
+  /* Moving Rollbook precision fit (A4 Landscape Full Height 1-Page Exact Fit) */
+  .print-page.moving-page {
+    height: 189mm !important;
+    max-height: 189mm !important;
+    min-height: 189mm !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
   .moving-page .page-header {
     margin-bottom: 4px !important;
     padding-bottom: 2px !important;
+    flex-shrink: 0 !important;
   }
 
   .moving-page .period-columns-container {
+    flex: 1 !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-rows: 1fr !important;
     gap: 6px !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .moving-page.col-4 .period-columns-container {
+    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-rows: 1fr !important;
+  }
+
+  .moving-page.col-3 .period-columns-container {
+    grid-template-columns: repeat(3, 1fr) !important;
+    grid-template-rows: 1fr !important;
+  }
+
+  .moving-page.col-2 .period-columns-container {
+    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-rows: 1fr !important;
   }
 
   .moving-page .period-column {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
     border: 1px solid #000000 !important;
+    box-sizing: border-box !important;
   }
 
   .moving-page .period-col-header {
-    padding: 2px 4px !important;
+    flex-shrink: 0 !important;
+    padding: 3px 5px !important;
   }
 
   .moving-page .period-col-top {
@@ -1172,59 +1241,77 @@ body {
   }
 
   .moving-page .signature-box {
-    font-size: 8px !important;
+    font-size: 8.5px !important;
   }
 
   .moving-page .period-col-sub {
     font-size: 8.5px !important;
   }
 
+  .moving-page .table-wrapper {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
   .moving-page .roster-table {
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
     font-size: 8.5px !important;
-    line-height: 1.1 !important;
+  }
+
+  .moving-page .roster-table thead {
+    flex-shrink: 0 !important;
   }
 
   .moving-page .roster-table th {
-    padding: 1px 2px !important;
+    padding: 2px 2px !important;
     font-size: 8.5px !important;
-    height: 14px !important;
+    height: 16px !important;
   }
 
   .moving-page .student-row {
-    height: 12.5px !important;
-    max-height: 13px !important;
+    height: auto !important; /* Distribute available height evenly across rows */
+    max-height: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
   .moving-page .student-row td {
-    padding: 0.5px 2px !important;
-    height: 12.5px !important;
-    max-height: 13px !important;
-    font-size: 8px !important;
-    line-height: 1.1 !important;
+    padding: 1px 2px !important;
+    height: auto !important;
+    max-height: none !important;
+    font-size: 8.5px !important;
+    line-height: 1.15 !important;
+    vertical-align: middle !important;
   }
 
   .moving-page .check-box {
-    width: 9px !important;
-    height: 9px !important;
+    width: 10px !important;
+    height: 10px !important;
   }
 
   .moving-page .period-col-footer {
+    flex-shrink: 0 !important;
     border-top: 1px solid #000000 !important;
     background-color: #ffffff !important;
-    padding: 2.5px 4px !important;
+    padding: 3px 5px !important;
   }
 
   .moving-page .footer-stat {
     border-bottom: 1px solid #000000 !important;
-    margin-bottom: 1.5px !important;
-    padding-bottom: 1.5px !important;
+    margin-bottom: 2px !important;
+    padding-bottom: 2px !important;
     font-size: 8.5px !important;
   }
 
   .moving-page .footer-stats-grid {
-    gap: 1px 4px !important;
+    gap: 1.5px 5px !important;
   }
 
   .moving-page .stat-grid-item {
