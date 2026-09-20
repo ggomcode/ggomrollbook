@@ -173,6 +173,28 @@ export const MovingRollbookView = {
             <span class="stat-val highlight">${roster.expectedAttendance}명</span>
             <span class="stat-total">/ 배정 ${roster.totalAssigned}명</span>
           </div>
+          <div class="footer-stats-grid">
+            <div class="stat-grid-item ${roster.stats?.saenggyeol ? 'has-count' : ''}">
+              <span class="sg-label">출석인정(생결):</span>
+              <span class="sg-val">${roster.stats ? roster.stats.saenggyeol : 0}명</span>
+            </div>
+            <div class="stat-grid-item ${roster.stats?.cheheom ? 'has-count' : ''}">
+              <span class="sg-label">출석인정(체험):</span>
+              <span class="sg-val">${roster.stats ? roster.stats.cheheom : 0}명</span>
+            </div>
+            <div class="stat-grid-item ${roster.stats?.jilbyeong ? 'has-count' : ''}">
+              <span class="sg-label">질병:</span>
+              <span class="sg-val">${roster.stats ? roster.stats.jilbyeong : 0}명</span>
+            </div>
+            <div class="stat-grid-item ${roster.stats?.gita ? 'has-count' : ''}">
+              <span class="sg-label">기타:</span>
+              <span class="sg-val">${roster.stats ? roster.stats.gita : 0}명</span>
+            </div>
+            <div class="stat-grid-item ${roster.stats?.miinjeong ? 'has-count' : ''}">
+              <span class="sg-label">미인정:</span>
+              <span class="sg-val">${roster.stats ? roster.stats.miinjeong : 0}명</span>
+            </div>
+          </div>
         </div>
       </div>
     `;

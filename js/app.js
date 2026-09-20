@@ -46,6 +46,7 @@ class App {
     this.state.weeks = RollbookModel.getAcademicWeeks();
     this.updateStatusIndicator();
     this.restoreHashState();
+    this.updatePrintOrientation();
     this.setupEventListeners();
     await this.loadData();
     this.renderControls();
@@ -130,12 +131,23 @@ class App {
     }, { signal });
   }
 
+  updatePrintOrientation() {
+    let styleEl = document.getElementById('printPageOrientationStyle');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'printPageOrientationStyle';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `@page { size: A4 landscape; margin: 10mm 15mm; }`;
+  }
+
   switchView(view) {
     this.state.view = view;
     document.querySelectorAll('.nav-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.view === view);
     });
 
+    this.updatePrintOrientation();
     this.pushHashState();
     this.renderControls();
     this.renderContent();
@@ -215,6 +227,7 @@ class App {
 
     let summary = '';
     let pageEstimate = 0;
+    const orientationLabel = 'A4 가로';
 
     if (view === 'moving') {
       const dayCount = selectedDayIdx === 'all' ? 5 : 1;
@@ -231,9 +244,10 @@ class App {
       summary = `학생·시간표 검색 결과`;
     }
 
-    const msg = `📄 인쇄 확인\n\n${summary}\n\n📊 예상 인쇄 매수: 약 ${pageEstimate}장 (A4 가로)\n\n인쇄를 진행하시겠습니까?`;
+    const msg = `📄 인쇄 확인\n\n${summary}\n\n📊 예상 인쇄 매수: 약 ${pageEstimate}장 (${orientationLabel})\n\n인쇄를 진행하시겠습니까?`;
 
     if (confirm(msg)) {
+      this.updatePrintOrientation();
       window.print();
     }
   }

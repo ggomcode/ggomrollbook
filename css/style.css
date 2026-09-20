@@ -368,7 +368,7 @@ body {
   box-shadow: var(--shadow-paper);
   width: 297mm;
   min-height: 210mm;
-  padding: 15mm;
+  padding: 10mm 15mm;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -543,34 +543,73 @@ body {
   print-color-adjust: exact;
 }
 
-/* Column Footer (Expected Attendance) */
+/* Column Footer (Expected Attendance & Category Stats) */
 .period-col-footer {
   border-top: 1px solid #000000;
   background-color: #f8fafc;
-  padding: 4px 6px;
-  font-size: 10.5px;
+  padding: 4px 5px;
+  font-size: 9.5px;
 }
 
 .footer-stat {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-bottom: 2px;
+  border-bottom: 1px dashed #cbd5e1;
+  margin-bottom: 3px;
 }
 
 .stat-label {
   font-weight: 700;
-  color: #334155;
+  color: #1e293b;
+  font-size: 9.5px;
 }
 
 .stat-val.highlight {
   font-weight: 800;
   color: #000000;
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .stat-total {
-  font-size: 10px;
+  font-size: 9px;
   color: #64748b;
+}
+
+.footer-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5px 6px;
+  font-size: 8px;
+}
+
+.stat-grid-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.stat-grid-item .sg-label {
+  font-weight: 500;
+  font-size: 8px;
+}
+
+.stat-grid-item .sg-val {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 8px;
+}
+
+.stat-grid-item.has-count {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.stat-grid-item.has-count .sg-val {
+  color: #b91c1c;
 }
 
 /* Special Column (Cancelled or Holiday) */
@@ -637,10 +676,20 @@ body {
 .homeroom-table .col-num { width: 24px; }
 .homeroom-table .col-id { width: 42px; font-family: monospace; font-size: 9px; }
 .homeroom-table .col-name { width: 44px; text-align: left; padding-left: 3px; font-weight: 600; }
-.homeroom-table .col-remark { width: 28px; font-size: 8px; }
+.homeroom-table .col-remark {
+  width: 28px;
+  font-size: 8px;
+  border-right: 2px solid #000000 !important; /* 비고와 요일 구분선 (진한선) */
+}
+
+/* 요일과 요일 구분선 (각 요일의 마지막 열 및 요일 헤더) */
+.homeroom-table .col-day-end {
+  border-right: 2px solid #000000 !important; /* 요일과 요일 구분선 (진한선) */
+}
 
 .day-group-header {
   border-bottom: 1px solid #000000 !important;
+  border-right: 2px solid #000000 !important; /* 요일 헤더 구분선 (진한선) */
   font-size: 10px;
 }
 
@@ -930,7 +979,7 @@ body {
 @media print {
   @page {
     size: A4 landscape;
-    margin: 15mm;
+    margin: 10mm 15mm;
   }
 
   /* Hide screen-only UI */
@@ -971,6 +1020,7 @@ body {
     height: auto !important;
     box-sizing: border-box !important;
     display: block !important;
+    overflow: hidden !important; /* CRITICAL: Strictly locks each page inside 1 physical sheet */
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     page-break-after: always !important;
@@ -1088,26 +1138,104 @@ body {
     height: 8px !important;
   }
 
-  /* Moving Rollbook precision fit */
-  .moving-page .student-row td {
-    padding: 1px 2px !important;
-    height: 14px !important;
-    font-size: 8.5px !important;
-    line-height: 1.15 !important;
+  /* 비고와 요일, 요일과 요일 구분선 (인쇄 시 2px 진한선 유지) */
+  .homeroom-table .col-remark,
+  .homeroom-table .day-group-header,
+  .homeroom-table .col-day-end {
+    border-right: 2px solid #000000 !important;
   }
 
-  .moving-page .roster-table th {
-    padding: 1.5px 2px !important;
-    font-size: 8.5px !important;
+  /* Moving Rollbook precision fit (A4 Landscape 1-Page Exact Fit) */
+  .moving-page .page-header {
+    margin-bottom: 4px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .moving-page .period-columns-container {
+    gap: 6px !important;
+  }
+
+  .moving-page .period-column {
+    border: 1px solid #000000 !important;
   }
 
   .moving-page .period-col-header {
     padding: 2px 4px !important;
   }
 
-  .moving-page .page-header {
-    margin-bottom: 4px !important;
-    padding-bottom: 3px !important;
+  .moving-page .period-col-top {
+    margin-bottom: 1px !important;
+  }
+
+  .moving-page .period-badge {
+    font-size: 9.5px !important;
+  }
+
+  .moving-page .signature-box {
+    font-size: 8px !important;
+  }
+
+  .moving-page .period-col-sub {
+    font-size: 8.5px !important;
+  }
+
+  .moving-page .roster-table {
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+  }
+
+  .moving-page .roster-table th {
+    padding: 1px 2px !important;
+    font-size: 8.5px !important;
+    height: 14px !important;
+  }
+
+  .moving-page .student-row {
+    height: 12.5px !important;
+    max-height: 13px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .moving-page .student-row td {
+    padding: 0.5px 2px !important;
+    height: 12.5px !important;
+    max-height: 13px !important;
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+  }
+
+  .moving-page .check-box {
+    width: 9px !important;
+    height: 9px !important;
+  }
+
+  .moving-page .period-col-footer {
+    border-top: 1px solid #000000 !important;
+    background-color: #ffffff !important;
+    padding: 2.5px 4px !important;
+  }
+
+  .moving-page .footer-stat {
+    border-bottom: 1px solid #000000 !important;
+    margin-bottom: 1.5px !important;
+    padding-bottom: 1.5px !important;
+    font-size: 8.5px !important;
+  }
+
+  .moving-page .footer-stats-grid {
+    gap: 1px 4px !important;
+  }
+
+  .moving-page .stat-grid-item {
+    font-size: 7.5px !important;
+    color: #000000 !important;
+  }
+
+  .moving-page .stat-grid-item .sg-label,
+  .moving-page .stat-grid-item .sg-val {
+    font-size: 7.5px !important;
+    color: #000000 !important;
   }
 }
 

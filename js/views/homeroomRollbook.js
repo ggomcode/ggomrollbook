@@ -63,10 +63,12 @@ export const HomeroomRollbookView = {
       const dayInfo = days[i];
       const isHoliday = !!holidaysMap.fullDayEvents[dayInfo.dateStr];
 
-      spec.periods.forEach(p => {
+      spec.periods.forEach((p, pIdx) => {
         const isChangche = (spec.day === '수' && (p === 5 || p === 6));
         const pLabel = isChangche ? '창' : p;
-        periodHeadersHtml += `<th class="period-sub-th ${isHoliday ? 'th-holiday' : ''}">${pLabel}</th>`;
+        const isDayEnd = (pIdx === spec.periods.length - 1);
+        const dayEndClass = isDayEnd ? 'col-day-end' : '';
+        periodHeadersHtml += `<th class="period-sub-th ${isHoliday ? 'th-holiday' : ''} ${dayEndClass}">${pLabel}</th>`;
       });
     });
 
@@ -80,7 +82,7 @@ export const HomeroomRollbookView = {
         const dayInfo = days[dIdx];
         const isHoliday = !!holidaysMap.fullDayEvents[dayInfo.dateStr];
 
-        spec.periods.forEach(p => {
+        spec.periods.forEach((p, pIdx) => {
           let cellText = '';
           let isTint = false;
 
@@ -102,7 +104,9 @@ export const HomeroomRollbookView = {
           }
 
           const tintClass = isTint ? 'cell-tint-10' : '';
-          cellsHtml += `<td class="period-cell ${tintClass}">${escapeHtml(cellText) || '<span class="check-box-sm"></span>'}</td>`;
+          const isDayEnd = (pIdx === spec.periods.length - 1);
+          const dayEndClass = isDayEnd ? 'col-day-end' : '';
+          cellsHtml += `<td class="period-cell ${tintClass} ${dayEndClass}">${escapeHtml(cellText) || '<span class="check-box-sm"></span>'}</td>`;
         });
       });
 

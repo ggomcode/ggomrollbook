@@ -269,53 +269,73 @@ export const RollbookModel = {
 
     // 1. 자퇴 / 위탁 / 전출 -> 50% dark shading for entire row, not present
     if (pRemark.includes('자퇴') || pRemark.includes('위탁') || pRemark.includes('전출')) {
-      return { text: pRemark, isShaded: true, is50Dark: true, isPresent: false };
+      return { text: pRemark, isShaded: true, is50Dark: true, isPresent: false, category: 'drop' };
     }
 
     // 2. 특수 -> '특' (10% tint)
     if (pRemark.includes('특수')) {
-      return { text: '특', isShaded: true, is50Dark: false, isPresent: false };
+      return { text: '특', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
     }
 
     // 3. 파스 -> '파' (10% tint)
     if (pRemark.includes('파스')) {
-      return { text: '파', isShaded: true, is50Dark: false, isPresent: false };
+      return { text: '파', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
     }
 
     // 4. 순회 -> '순' (10% tint)
     if (pRemark.includes('순회')) {
-      return { text: '순', isShaded: true, is50Dark: false, isPresent: false };
+      return { text: '순', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
     }
 
     // 5. Weekly recurring absence/early departure
-    const att = student.weeklyAtt[dayOfWeek];
+    const att = student.weeklyAtt ? student.weeklyAtt[dayOfWeek] : null;
     if (att && att.type) {
-      // 미인정 결석
-      if (att.type.includes('미인정')) {
-        if (att.time.includes('결석')) {
-          return { text: '미', isShaded: true, is50Dark: false, isPresent: false };
-        }
-        // 미인정 N교시 조퇴
-        const pMatch = att.time.match(/(\d)교시/);
-        if (pMatch && periodNum >= parseInt(pMatch[1], 10)) {
-          return { text: '미', isShaded: true, is50Dark: false, isPresent: false };
-        }
-      }
+      const type = att.type.trim();
+      const time = (att.time || '').trim();
+      const pMatch = time.match(/(\d)교시/);
+      const isApplicable = time.includes('결석') || (pMatch && periodNum >= parseInt(pMatch[1], 10)) || !time;
 
-      // 질병 결석 or 조퇴
-      if (att.type.includes('질병')) {
-        if (att.time.includes('결석')) {
-          return { text: '병', isShaded: true, is50Dark: false, isPresent: false };
+      if (isApplicable) {
+        // 출석인정(생결)
+        if (type.includes('생결') || type.includes('생리')) {
+          return { text: '생', isShaded: true, is50Dark: false, isPresent: false, category: 'saenggyeol' };
         }
-        const pMatch = att.time.match(/(\d)교시/);
-        if (pMatch && periodNum >= parseInt(pMatch[1], 10)) {
-          return { text: '병', isShaded: true, is50Dark: false, isPresent: false };
+        // 출석인정(체험)
+        if (type.includes('체험')) {
+          return { text: '체', isShaded: true, is50Dark: false, isPresent: false, category: 'cheheom' };
+        }
+        // 질병
+        if (type.includes('질병') || type.includes('병결') || type.includes('병')) {
+          return { text: '병', isShaded: true, is50Dark: false, isPresent: false, category: 'jilbyeong' };
+        }
+        // 기타
+        if (type.includes('기타')) {
+          return { text: '기', isShaded: true, is50Dark: false, isPresent: false, category: 'gita' };
+        }
+        // 미인정
+        if (type.includes('미인정') || type.includes('무단')) {
+          return { text: '미', isShaded: true, is50Dark: false, isPresent: false, category: 'miinjeong' };
+        }
+        // 기타 출석인정 / 공결
+        if (type.includes('인정') || type.includes('공결')) {
+          return { text: '인', isShaded: true, is50Dark: false, isPresent: false, category: 'saenggyeol' };
         }
       }
     }
 
+    // Check pRemark for attendance keywords if not in weeklyAtt
+    if (pRemark.includes('생결') || pRemark.includes('생리')) {
+      return { text: '생', isShaded: true, is50Dark: false, isPresent: false, category: 'saenggyeol' };
+    }
+    if (pRemark.includes('체험')) {
+      return { text: '체', isShaded: true, is50Dark: false, isPresent: false, category: 'cheheom' };
+    }
+    if (pRemark.includes('기타')) {
+      return { text: '기', isShaded: true, is50Dark: false, isPresent: false, category: 'gita' };
+    }
+
     // Default: Regular student present (blank box for pen checking)
-    return { text: '', isShaded: false, is50Dark: false, isPresent: true };
+    return { text: '', isShaded: false, is50Dark: false, isPresent: true, category: 'present' };
   },
 
   /**
@@ -406,11 +426,23 @@ export const RollbookModel = {
     // Sort students by studentId (학번순)
     assignedStudents.sort((a, b) => a.studentId.localeCompare(b.studentId));
 
-    // Calculate expected attendance for this period
+    // Calculate expected attendance and absence categories for this period
     let expectedAttendance = 0;
+    const stats = {
+      saenggyeol: 0, // 출석인정(생결)
+      cheheom: 0,    // 출석인정(체험)
+      jilbyeong: 0,  // 질병
+      gita: 0,       // 기타
+      miinjeong: 0   // 미인정
+    };
+
     assignedStudents.forEach(st => {
       const status = this.getStudentPeriodStatus(st, dayOfWeek, periodNum);
-      if (status.isPresent) expectedAttendance++;
+      if (status.isPresent) {
+        expectedAttendance++;
+      } else if (status.category && stats[status.category] !== undefined) {
+        stats[status.category]++;
+      }
     });
 
     return {
@@ -423,6 +455,7 @@ export const RollbookModel = {
       status: 'normal',
       students: assignedStudents,
       expectedAttendance,
+      stats,
       totalAssigned: assignedStudents.length
     };
   }
