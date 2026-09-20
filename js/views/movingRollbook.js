@@ -5,7 +5,7 @@
  * Page 2: 5~7 Periods (2 or 3 Columns)
  */
 
-import { RollbookModel } from '../models.js';
+import { RollbookModel, AcademicConfig, escapeHtml } from '../models.js';
 
 export const MovingRollbookView = {
   /**
@@ -30,13 +30,16 @@ export const MovingRollbookView = {
         );
         pages.push(this.renderPage(roomName, dayInfo, p1Rosters, '오전 (1~4교시)', 4));
 
-        // Determine max periods for the day: 화/목 has 7 periods, others 6
-        const has7Period = (dayInfo.dayOfWeek === '화' || dayInfo.dayOfWeek === '목');
-        const p2Periods = has7Period ? [5, 6, 7] : [5, 6];
+        // Determine max periods for the day from config
+        const maxPeriods = AcademicConfig.periodsPerDay[dayInfo.dayOfWeek] || 6;
+        const p2Start = 5;
+        const p2Periods = [];
+        for (let p = p2Start; p <= maxPeriods; p++) p2Periods.push(p);
+
         const p2Rosters = p2Periods.map(p =>
           RollbookModel.getRoomPeriodRoster(allStudents, roomName, dayInfo.dateStr, dayInfo.dayOfWeek, p, holidaysMap)
         );
-        pages.push(this.renderPage(roomName, dayInfo, p2Rosters, `오후 (5~${has7Period ? 7 : 6}교시)`, p2Periods.length));
+        pages.push(this.renderPage(roomName, dayInfo, p2Rosters, `오후 (5~${maxPeriods}교시)`, p2Periods.length));
       });
     });
 
@@ -49,7 +52,7 @@ export const MovingRollbookView = {
   renderPage(roomName, dayInfo, rosters, periodLabel, colCount) {
     // Room display title: e.g. "이동 1반 (3-1교실)"
     const roomNum = roomName.replace('3-', '');
-    const titleText = `[이동 ${roomNum}반 / ${roomName}교실]  ${dayInfo.fullDisplayDate} (${dayInfo.dayOfWeek}요일) 출석부`;
+    const titleText = `[이동 ${roomNum}반 / ${escapeHtml(roomName)}교실]  ${escapeHtml(dayInfo.fullDisplayDate)} (${dayInfo.dayOfWeek}요일) 출석부`;
 
     const columnsHtml = rosters.map(roster => this.renderPeriodColumn(roster, dayInfo)).join('');
 
@@ -62,7 +65,7 @@ export const MovingRollbookView = {
           </div>
           <div class="page-meta">
             <span class="meta-item">학교: 3학년</span>
-            <span class="meta-item">출석부 규격: A4 가로 (15mm 여백)</span>
+            <span class="meta-item print-timestamp"></span>
           </div>
         </div>
 
@@ -84,20 +87,20 @@ export const MovingRollbookView = {
 
     // Header title
     let headerTitle = `${roster.periodNum}교시`;
-    let subTitle = `${roster.subject} (${roster.teacher}T)`;
+    let subTitle = `${escapeHtml(roster.subject)} (${escapeHtml(roster.teacher)}T)`;
 
     if (roster.isSwap) {
-      headerTitle += ` [${roster.scheduleKey} 수업]`;
+      headerTitle += ` [${escapeHtml(roster.scheduleKey)} 수업]`;
     }
 
     if (isWednesdayChangche) {
       subTitle = '창의적 체험활동 (원적학급)';
     } else if (isHoliday) {
-      subTitle = `공휴일/행사: ${roster.title}`;
+      subTitle = `공휴일/행사: ${escapeHtml(roster.title)}`;
     } else if (isCancelled) {
-      subTitle = roster.title;
+      subTitle = escapeHtml(roster.title);
     } else if (isActivity) {
-      subTitle = roster.title;
+      subTitle = escapeHtml(roster.title);
     }
 
     // If holiday or cancelled, display shaded notification banner
@@ -127,12 +130,12 @@ export const MovingRollbookView = {
       return `
         <tr class="student-row ${is50Dark}">
           <td class="col-seq">${idx + 1}</td>
-          <td class="col-id">${st.studentId}</td>
-          <td class="col-name">${st.name}</td>
+          <td class="col-id">${escapeHtml(st.studentId)}</td>
+          <td class="col-name">${escapeHtml(st.name)}</td>
           <td class="col-check ${is10Tint}">
-            ${status.text || '<span class="check-box"></span>'}
+            ${escapeHtml(status.text) || '<span class="check-box"></span>'}
           </td>
-          <td class="col-remark">${st.pRemark || ''}</td>
+          <td class="col-remark">${escapeHtml(st.pRemark)}</td>
         </tr>
       `;
     }).join('');

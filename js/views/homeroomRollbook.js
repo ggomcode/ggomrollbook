@@ -4,7 +4,7 @@
  * Mon~Fri 42 Columns with 1-letter period headers ('조', 1~6/7, '종').
  */
 
-import { RollbookModel } from '../models.js';
+import { RollbookModel, AcademicConfig, escapeHtml } from '../models.js';
 
 export const HomeroomRollbookView = {
   /**
@@ -38,21 +38,21 @@ export const HomeroomRollbookView = {
   renderBanPage(banNum, students, weekInfo, holidaysMap) {
     const days = weekInfo.days; // Mon, Tue, Wed, Thu, Fri
 
-    // Day configs: period count per day
+    // Day configs: period count per day from AcademicConfig
     const daySpecs = [
-      { day: '월', count: 8, periods: ['조', 1, 2, 3, 4, 5, 6, '종'] },
-      { day: '화', count: 9, periods: ['조', 1, 2, 3, 4, 5, 6, 7, '종'] },
-      { day: '수', count: 8, periods: ['조', 1, 2, 3, 4, 5, 6, '종'] },
-      { day: '목', count: 9, periods: ['조', 1, 2, 3, 4, 5, 6, 7, '종'] },
-      { day: '금', count: 8, periods: ['조', 1, 2, 3, 4, 5, 6, '종'] }
+      { day: '월', periods: this._buildPeriodList('월') },
+      { day: '화', periods: this._buildPeriodList('화') },
+      { day: '수', periods: this._buildPeriodList('수') },
+      { day: '목', periods: this._buildPeriodList('목') },
+      { day: '금', periods: this._buildPeriodList('금') }
     ];
 
     // Day header cells
     const dayHeadersHtml = days.map((d, i) => {
       const spec = daySpecs[i];
       const holidayName = holidaysMap.fullDayEvents[d.dateStr];
-      const titleExtra = holidayName ? ` <span class="holiday-pill">[${holidayName}]</span>` : '';
-      return `<th colspan="${spec.count}" class="day-group-header ${holidayName ? 'th-holiday' : ''}">
+      const titleExtra = holidayName ? ` <span class="holiday-pill">[${escapeHtml(holidayName)}]</span>` : '';
+      return `<th colspan="${spec.periods.length}" class="day-group-header ${holidayName ? 'th-holiday' : ''}">
         ${d.dayOfWeek} (${d.displayDate})${titleExtra}
       </th>`;
     }).join('');
@@ -86,6 +86,11 @@ export const HomeroomRollbookView = {
 
           if (isHoliday) {
             cellText = '-';
+          } else if (p === '조' || p === '종') {
+            // 조회/종례: show special student marks only, regular students get checkbox
+            const status = this._getSpecialMarkOnly(st);
+            cellText = status.text;
+            isTint = status.isShaded && !isDarkRow;
           } else if (spec.day === '수' && (p === 5 || p === 6)) {
             cellText = '창';
             isTint = true;
@@ -97,7 +102,7 @@ export const HomeroomRollbookView = {
           }
 
           const tintClass = isTint ? 'cell-tint-10' : '';
-          cellsHtml += `<td class="period-cell ${tintClass}">${cellText || '<span class="check-box-sm"></span>'}</td>`;
+          cellsHtml += `<td class="period-cell ${tintClass}">${escapeHtml(cellText) || '<span class="check-box-sm"></span>'}</td>`;
         });
       });
 
@@ -105,9 +110,9 @@ export const HomeroomRollbookView = {
         <tr class="homeroom-student-row ${darkClass}">
           <td class="col-seq">${idx + 1}</td>
           <td class="col-num">${st.num}</td>
-          <td class="col-id">${st.studentId}</td>
-          <td class="col-name">${st.name}</td>
-          <td class="col-remark">${st.pRemark || ''}</td>
+          <td class="col-id">${escapeHtml(st.studentId)}</td>
+          <td class="col-name">${escapeHtml(st.name)}</td>
+          <td class="col-remark">${escapeHtml(st.pRemark)}</td>
           ${cellsHtml}
         </tr>
       `;
@@ -118,11 +123,12 @@ export const HomeroomRollbookView = {
         <div class="page-header">
           <div class="page-title-group">
             <h2 class="page-title">[3학년 ${banNum}반] 주간 출석부</h2>
-            <span class="page-period-tag">${weekInfo.label}</span>
+            <span class="page-period-tag">${escapeHtml(weekInfo.label)}</span>
           </div>
           <div class="page-meta">
             <span class="meta-item">재적: ${students.length}명</span>
             <span class="meta-item">담임 확인: _______ (인)</span>
+            <span class="meta-item print-timestamp"></span>
           </div>
         </div>
 
@@ -148,5 +154,31 @@ export const HomeroomRollbookView = {
         </div>
       </div>
     `;
+  },
+
+  /**
+   * Build period list for a given day: ['조', 1, 2, ..., 6/7, '종']
+   */
+  _buildPeriodList(day) {
+    const maxPeriod = AcademicConfig.periodsPerDay[day] || 6;
+    const periods = ['조'];
+    for (let i = 1; i <= maxPeriod; i++) periods.push(i);
+    periods.push('종');
+    return periods;
+  },
+
+  /**
+   * Get only the special mark (특/파/순/자퇴...) for 조/종 columns
+   * without checking period-based attendance
+   */
+  _getSpecialMarkOnly(student) {
+    const pRemark = student.pRemark;
+    if (pRemark.includes('자퇴') || pRemark.includes('위탁') || pRemark.includes('전출')) {
+      return { text: pRemark, isShaded: true };
+    }
+    if (pRemark.includes('특수')) return { text: '특', isShaded: true };
+    if (pRemark.includes('파스')) return { text: '파', isShaded: true };
+    if (pRemark.includes('순회')) return { text: '순', isShaded: true };
+    return { text: '', isShaded: false };
   }
 };

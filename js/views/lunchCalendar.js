@@ -4,7 +4,7 @@
  * holidays, and monthly totals.
  */
 
-import { RollbookModel } from '../models.js';
+import { RollbookModel, AcademicConfig, escapeHtml } from '../models.js';
 
 export const LunchCalendarView = {
   /**
@@ -18,6 +18,23 @@ export const LunchCalendarView = {
       { year: 2026, month: 12, label: '2026년 12월' },
       { year: 2027, month: 1, label: '2027년 1월 (졸업식: 1.6)' }
     ];
+  },
+
+  /**
+   * Determine if a fullDayEvent means no lunch
+   */
+  _isNoLunchEvent(eventName) {
+    if (!eventName) return false;
+    // Check explicit no-lunch keywords
+    for (const kw of AcademicConfig.noLunchKeywords) {
+      if (eventName.includes(kw)) return true;
+    }
+    // Check if it's a lunch-served event (exams, festivals etc.)
+    for (const kw of AcademicConfig.lunchServedKeywords) {
+      if (eventName.includes(kw)) return false;
+    }
+    // Default: unknown events still serve lunch (conservative approach)
+    return false;
   },
 
   /**
@@ -51,23 +68,15 @@ export const LunchCalendarView = {
 
       const isWeekend = (dayOfWeekIdx === 0 || dayOfWeekIdx === 6);
       const holidayEvent = holidaysMap.fullDayEvents[dateStr] || '';
-      const isGraduation = (dateStr === '2027-01-06');
+      const isGraduation = (dateStr === AcademicConfig.graduationDate);
 
       let lunchCount = 0;
       let banBreakdown = {};
       let isNoLunch = isWeekend;
 
       if (!isWeekend) {
-        // Check if full-day holiday excludes lunch
-        if (holidayEvent && (
-          holidayEvent.includes('추석') ||
-          holidayEvent.includes('공휴일') ||
-          holidayEvent.includes('한글날') ||
-          holidayEvent.includes('수능') ||
-          holidayEvent.includes('휴업') ||
-          holidayEvent.includes('성탄절') ||
-          holidayEvent.includes('신정')
-        )) {
+        // Check if this event means no lunch
+        if (holidayEvent && this._isNoLunchEvent(holidayEvent)) {
           isNoLunch = true;
         }
 
@@ -142,12 +151,12 @@ export const LunchCalendarView = {
         let badgeHtml = '';
         if (cell.isNoLunch) {
           if (cell.holidayEvent) {
-            badgeHtml = `<span class="event-tag">${cell.holidayEvent}</span><span class="no-lunch-tag">급식 없음</span>`;
+            badgeHtml = `<span class="event-tag">${escapeHtml(cell.holidayEvent)}</span><span class="no-lunch-tag">급식 없음</span>`;
           } else if (!cell.isWeekend) {
             badgeHtml = `<span class="no-lunch-tag">급식 미운영</span>`;
           }
         } else {
-          let eventTag = cell.holidayEvent ? `<span class="event-tag">${cell.holidayEvent}</span>` : '';
+          let eventTag = cell.holidayEvent ? `<span class="event-tag">${escapeHtml(cell.holidayEvent)}</span>` : '';
           badgeHtml = `
             ${eventTag}
             <div class="lunch-badge">
@@ -208,6 +217,7 @@ export const LunchCalendarView = {
         <div class="calendar-footer-notes">
           <div class="note-item">※ 집계 기준: P열 비고(순회·자퇴·위탁·전출 제외, 특수·파스 포함), 중식여부 'X' 표기자 제외 산출</div>
           <div class="note-item">※ 담당자 확인: 영양교사 _____________ (인) &nbsp;|&nbsp; 담당부장 _____________ (인)</div>
+          <div class="note-item print-timestamp"></div>
         </div>
       </div>
     `;

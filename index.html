@@ -20,6 +20,9 @@
     </div>
 
     <div class="header-actions">
+      <div id="todayBadge" class="status-badge status-today">
+        <span>📅</span> 오늘: 계산 중...
+      </div>
       <div id="syncStatus" class="status-badge status-live">
         <span class="status-dot"></span>데이터 준비 중...
       </div>
@@ -66,6 +69,17 @@
 
   <!-- Pre-cached offline fallback data -->
   <script src="data/defaultData.js"></script>
+
+  <!-- Print timestamp auto-fill -->
+  <script>
+    window.addEventListener('beforeprint', () => {
+      const now = new Date();
+      const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      document.querySelectorAll('.print-timestamp').forEach(el => {
+        el.setAttribute('data-timestamp', ts);
+      });
+    });
+  </script>
 
   <!-- Main App Module -->
   <script type="module" src="js/app.js"></script>

@@ -3,7 +3,7 @@
  */
 
 import { SheetAPI } from './api.js';
-import { RollbookModel } from './models.js';
+import { RollbookModel, AcademicConfig, escapeHtml } from './models.js';
 import { MovingRollbookView } from './views/movingRollbook.js';
 import { HomeroomRollbookView } from './views/homeroomRollbook.js';
 import { LunchCalendarView } from './views/lunchCalendar.js';
@@ -11,28 +11,41 @@ import { StudentFinderView } from './views/studentFinder.js';
 
 class App {
   constructor() {
+    const autoWeek = RollbookModel.getCurrentWeekNum();
+    const autoMonth = RollbookModel.getCurrentLunchMonth();
+
+    this.autoWeek = autoWeek;
+    this.todayInfo = RollbookModel.getTodayInfo();
+
     this.state = {
       view: 'moving', // 'moving' | 'homeroom' | 'lunch' | 'finder'
       allStudents: [],
       holidaysMap: { fullDayEvents: {}, periodOverrides: {} },
       weeks: [],
-      currentWeekNum: 6, // Default 6주차 (2026.09.21)
+      currentWeekNum: autoWeek,
       selectedDayIdx: 'all', // 'all' or 0 (월), 1 (화), 2 (수), 3 (목), 4 (금)
-      selectedRooms: ['3-1', '3-2', '3-3', '3-4', '3-5', '3-6', '3-7', '3-8', '3-9', '3-10', '3-11', '3-12'],
-      selectedBans: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-      selectedLunchYear: 2026,
-      selectedLunchMonth: 9,
+      selectedRooms: [...AcademicConfig.allRooms],
+      selectedBans: [...AcademicConfig.allBans],
+      selectedLunchYear: autoMonth.year,
+      selectedLunchMonth: autoMonth.month,
       finderQuery: '',
       isLive: false,
       lastUpdated: null
     };
 
-    this.allRooms = ['3-1', '3-2', '3-3', '3-4', '3-5', '3-6', '3-7', '3-8', '3-9', '3-10', '3-11', '3-12'];
-    this.allBans = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    this.allRooms = AcademicConfig.allRooms;
+    this.allBans = AcademicConfig.allBans;
+
+    // AbortController for dynamic event listeners (prevents memory leak)
+    this._dynamicAbort = null;
+    // Global listeners that only need to be attached once
+    this._globalAbort = new AbortController();
   }
 
   async init() {
     this.state.weeks = RollbookModel.getAcademicWeeks();
+    this.updateStatusIndicator();
+    this.restoreHashState();
     this.setupEventListeners();
     await this.loadData();
     this.renderControls();
@@ -61,25 +74,33 @@ class App {
   }
 
   updateStatusIndicator() {
+    const todayEl = document.getElementById('todayBadge');
+    if (todayEl) {
+      todayEl.innerHTML = `<span>📅</span> 오늘: <strong>${this.todayInfo.display}</strong> <span class="badge-sub">(${this.autoWeek}주차 자동 선택)</span>`;
+    }
+
     const el = document.getElementById('syncStatus');
     if (!el) return;
 
+    const count = this.state.allStudents.length;
     if (this.state.isLive) {
       el.className = 'status-badge status-live';
-      el.innerHTML = `<span class="status-dot"></span>구글 시트 실시간 연결됨 (${this.state.allStudents.length}명)`;
+      el.innerHTML = `<span class="status-dot"></span>구글 시트 실시간 연결됨 (${count}명)`;
     } else {
       el.className = 'status-badge status-offline';
-      el.innerHTML = `<span class="status-dot"></span>캐시 데이터 사용 중 (${this.state.allStudents.length}명)`;
+      el.innerHTML = `<span class="status-dot"></span>캐시 데이터 사용 중 (${count}명)`;
     }
   }
 
   setupEventListeners() {
+    const signal = this._globalAbort.signal;
+
     // View Switcher Buttons
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const view = e.currentTarget.dataset.view;
         this.switchView(view);
-      });
+      }, { signal });
     });
 
     // Refresh Data Button
@@ -90,16 +111,23 @@ class App {
         await this.loadData();
         refreshBtn.classList.remove('spinning');
         this.renderContent();
-      });
+      }, { signal });
     }
 
-    // Print Button
+    // Print Button — with confirmation dialog
     const printBtn = document.getElementById('printBtn');
     if (printBtn) {
       printBtn.addEventListener('click', () => {
-        window.print();
-      });
+        this.showPrintDialog();
+      }, { signal });
     }
+
+    // Hash change listener for browser back/forward
+    window.addEventListener('hashchange', () => {
+      this.restoreHashState();
+      this.renderControls();
+      this.renderContent();
+    }, { signal });
   }
 
   switchView(view) {
@@ -108,13 +136,116 @@ class App {
       b.classList.toggle('active', b.dataset.view === view);
     });
 
+    this.pushHashState();
     this.renderControls();
     this.renderContent();
   }
 
+  // ── URL Hash State ──────────────────────────────────────────────────────
+  pushHashState() {
+    const { view, currentWeekNum, selectedDayIdx, selectedRooms, selectedBans, selectedLunchYear, selectedLunchMonth } = this.state;
+    const params = new URLSearchParams();
+    params.set('v', view);
+
+    if (view === 'moving') {
+      params.set('w', currentWeekNum);
+      if (selectedDayIdx !== 'all') params.set('d', selectedDayIdx);
+      if (selectedRooms.length !== this.allRooms.length) {
+        params.set('r', selectedRooms.join(','));
+      }
+    } else if (view === 'homeroom') {
+      params.set('w', currentWeekNum);
+      if (selectedBans.length !== this.allBans.length) {
+        params.set('b', selectedBans.join(','));
+      }
+    } else if (view === 'lunch') {
+      params.set('y', selectedLunchYear);
+      params.set('m', selectedLunchMonth);
+    }
+
+    const hash = '#' + params.toString();
+    if (window.location.hash !== hash) {
+      history.replaceState(null, '', hash);
+    }
+  }
+
+  restoreHashState() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+
+    try {
+      const params = new URLSearchParams(hash);
+      const view = params.get('v');
+      if (view && ['moving', 'homeroom', 'lunch', 'finder'].includes(view)) {
+        this.state.view = view;
+        document.querySelectorAll('.nav-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.view === view);
+        });
+      }
+
+      const w = parseInt(params.get('w'), 10);
+      if (!isNaN(w) && w >= AcademicConfig.startWeekNum && w <= AcademicConfig.endWeekNum) {
+        this.state.currentWeekNum = w;
+      }
+
+      const d = params.get('d');
+      if (d !== null) {
+        this.state.selectedDayIdx = d === 'all' ? 'all' : parseInt(d, 10);
+      }
+
+      const r = params.get('r');
+      if (r) this.state.selectedRooms = r.split(',').filter(v => this.allRooms.includes(v));
+
+      const b = params.get('b');
+      if (b) this.state.selectedBans = b.split(',').map(Number).filter(v => this.allBans.includes(v));
+
+      const ly = parseInt(params.get('y'), 10);
+      const lm = parseInt(params.get('m'), 10);
+      if (!isNaN(ly)) this.state.selectedLunchYear = ly;
+      if (!isNaN(lm)) this.state.selectedLunchMonth = lm;
+    } catch (e) {
+      console.warn('Failed to restore hash state:', e);
+    }
+  }
+
+  // ── Print Confirmation ──────────────────────────────────────────────────
+  showPrintDialog() {
+    const { view, currentWeekNum, selectedRooms, selectedBans, selectedDayIdx, selectedLunchYear, selectedLunchMonth } = this.state;
+    const weekObj = this.state.weeks.find(w => w.weekNum === currentWeekNum);
+
+    let summary = '';
+    let pageEstimate = 0;
+
+    if (view === 'moving') {
+      const dayCount = selectedDayIdx === 'all' ? 5 : 1;
+      pageEstimate = selectedRooms.length * dayCount * 2;
+      summary = `이동수업 출석부\n• ${weekObj?.label || ''}\n• ${selectedDayIdx === 'all' ? '월~금 전체' : ['월','화','수','목','금'][selectedDayIdx] + '요일'}\n• 교실: ${selectedRooms.length}개 (${selectedRooms.join(', ')})`;
+    } else if (view === 'homeroom') {
+      pageEstimate = selectedBans.length;
+      summary = `원적학급 주간 출석부\n• ${weekObj?.label || ''}\n• 학급: ${selectedBans.length}개 (${selectedBans.map(b => b + '반').join(', ')})`;
+    } else if (view === 'lunch') {
+      pageEstimate = 1;
+      summary = `월별 예상 급식 캘린더\n• ${selectedLunchYear}년 ${selectedLunchMonth}월`;
+    } else if (view === 'finder') {
+      pageEstimate = 1;
+      summary = `학생·시간표 검색 결과`;
+    }
+
+    const msg = `📄 인쇄 확인\n\n${summary}\n\n📊 예상 인쇄 매수: 약 ${pageEstimate}장 (A4 가로)\n\n인쇄를 진행하시겠습니까?`;
+
+    if (confirm(msg)) {
+      window.print();
+    }
+  }
+
+  // ── Controls Rendering ──────────────────────────────────────────────────
   renderControls() {
     const container = document.getElementById('toolbarControls');
     if (!container) return;
+
+    // Abort previous dynamic listeners
+    if (this._dynamicAbort) this._dynamicAbort.abort();
+    this._dynamicAbort = new AbortController();
 
     const { view, weeks, currentWeekNum, selectedDayIdx, selectedLunchYear, selectedLunchMonth } = this.state;
     let html = '';
@@ -122,7 +253,7 @@ class App {
     if (view === 'moving') {
       // 1. Week Dropdown
       const weekOptions = weeks.map(w =>
-        `<option value="${w.weekNum}" ${w.weekNum === currentWeekNum ? 'selected' : ''}>${w.label}</option>`
+        `<option value="${w.weekNum}" ${w.weekNum === currentWeekNum ? 'selected' : ''}>${escapeHtml(w.label)}</option>`
       ).join('');
 
       // 2. Day selector
@@ -146,7 +277,12 @@ class App {
       html = `
         <div class="control-group">
           <label class="control-label">주차 선택:</label>
-          <select id="weekSelect" class="styled-select">${weekOptions}</select>
+          <div class="week-select-container">
+            <select id="weekSelect" class="styled-select">${weekOptions}</select>
+            <button type="button" id="resetTodayWeekBtn" class="pill-btn ${currentWeekNum === this.autoWeek ? 'pill-today-active' : 'pill-today-jump'}" title="오늘에 해당하는 ${this.autoWeek}주차로 바로 이동">
+              🎯 오늘 (${this.autoWeek}주차)
+            </button>
+          </div>
         </div>
 
         <div class="control-group">
@@ -169,7 +305,7 @@ class App {
     } else if (view === 'homeroom') {
       // Week Dropdown
       const weekOptions = weeks.map(w =>
-        `<option value="${w.weekNum}" ${w.weekNum === currentWeekNum ? 'selected' : ''}>${w.label}</option>`
+        `<option value="${w.weekNum}" ${w.weekNum === currentWeekNum ? 'selected' : ''}>${escapeHtml(w.label)}</option>`
       ).join('');
 
       // Ban selector
@@ -184,7 +320,12 @@ class App {
       html = `
         <div class="control-group">
           <label class="control-label">주차 선택:</label>
-          <select id="weekSelect" class="styled-select">${weekOptions}</select>
+          <div class="week-select-container">
+            <select id="weekSelect" class="styled-select">${weekOptions}</select>
+            <button type="button" id="resetTodayWeekBtn" class="pill-btn ${currentWeekNum === this.autoWeek ? 'pill-today-active' : 'pill-today-jump'}" title="오늘에 해당하는 ${this.autoWeek}주차로 바로 이동">
+              🎯 오늘 (${this.autoWeek}주차)
+            </button>
+          </div>
         </div>
 
         <div class="control-group filter-dropdown-group">
@@ -201,7 +342,7 @@ class App {
       `;
     } else if (view === 'lunch') {
       const monthOptions = LunchCalendarView.getAvailableMonths().map(m =>
-        `<option value="${m.year}-${m.month}" ${m.year === selectedLunchYear && m.month === selectedLunchMonth ? 'selected' : ''}>${m.label}</option>`
+        `<option value="${m.year}-${m.month}" ${m.year === selectedLunchYear && m.month === selectedLunchMonth ? 'selected' : ''}>${escapeHtml(m.label)}</option>`
       ).join('');
 
       html = `
@@ -226,13 +367,28 @@ class App {
   }
 
   attachDynamicControlEvents() {
+    const signal = this._dynamicAbort.signal;
+
     // Week select
     const weekSelect = document.getElementById('weekSelect');
     if (weekSelect) {
       weekSelect.addEventListener('change', (e) => {
         this.state.currentWeekNum = parseInt(e.target.value, 10);
+        this.pushHashState();
+        this.renderControls();
         this.renderContent();
-      });
+      }, { signal });
+    }
+
+    // Jump to today's week button
+    const resetTodayBtn = document.getElementById('resetTodayWeekBtn');
+    if (resetTodayBtn) {
+      resetTodayBtn.addEventListener('click', () => {
+        this.state.currentWeekNum = this.autoWeek;
+        this.pushHashState();
+        this.renderControls();
+        this.renderContent();
+      }, { signal });
     }
 
     // Day pills
@@ -243,9 +399,10 @@ class App {
         if (!btn) return;
         const d = btn.dataset.day;
         this.state.selectedDayIdx = (d === 'all') ? 'all' : parseInt(d, 10);
+        this.pushHashState();
         this.renderControls();
         this.renderContent();
-      });
+      }, { signal });
     }
 
     // Room filter dropdown
@@ -255,30 +412,33 @@ class App {
       roomToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         roomMenu.style.display = roomMenu.style.display === 'none' ? 'block' : 'none';
-      });
+      }, { signal });
 
+      // Use signal-based listener to avoid leak
       document.addEventListener('click', (e) => {
         if (!roomMenu.contains(e.target) && e.target !== roomToggle) {
           roomMenu.style.display = 'none';
         }
-      });
+      }, { signal });
 
       const selectAll = document.getElementById('selectAllRooms');
       if (selectAll) {
         selectAll.addEventListener('change', (e) => {
           this.state.selectedRooms = e.target.checked ? [...this.allRooms] : [];
+          this.pushHashState();
           this.renderControls();
           this.renderContent();
-        });
+        }, { signal });
       }
 
       document.querySelectorAll('.room-cb').forEach(cb => {
         cb.addEventListener('change', () => {
           const checked = Array.from(document.querySelectorAll('.room-cb:checked')).map(el => el.value);
           this.state.selectedRooms = checked;
+          this.pushHashState();
           this.renderControls();
           this.renderContent();
-        });
+        }, { signal });
       });
     }
 
@@ -289,30 +449,32 @@ class App {
       banToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         banMenu.style.display = banMenu.style.display === 'none' ? 'block' : 'none';
-      });
+      }, { signal });
 
       document.addEventListener('click', (e) => {
         if (!banMenu.contains(e.target) && e.target !== banToggle) {
           banMenu.style.display = 'none';
         }
-      });
+      }, { signal });
 
       const selectAll = document.getElementById('selectAllBans');
       if (selectAll) {
         selectAll.addEventListener('change', (e) => {
           this.state.selectedBans = e.target.checked ? [...this.allBans] : [];
+          this.pushHashState();
           this.renderControls();
           this.renderContent();
-        });
+        }, { signal });
       }
 
       document.querySelectorAll('.ban-cb').forEach(cb => {
         cb.addEventListener('change', () => {
           const checked = Array.from(document.querySelectorAll('.ban-cb:checked')).map(el => parseInt(el.value, 10));
           this.state.selectedBans = checked;
+          this.pushHashState();
           this.renderControls();
           this.renderContent();
-        });
+        }, { signal });
       });
     }
 
@@ -323,8 +485,9 @@ class App {
         const [y, m] = e.target.value.split('-').map(Number);
         this.state.selectedLunchYear = y;
         this.state.selectedLunchMonth = m;
+        this.pushHashState();
         this.renderContent();
-      });
+      }, { signal });
     }
   }
 

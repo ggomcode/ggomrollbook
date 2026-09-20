@@ -2,6 +2,29 @@
  * Data Model & Business Logic for ggomrollbook
  */
 
+// ──── Academic Year Configuration ────────────────────────────────────────────
+// Change these values each year to reconfigure the system.
+export const AcademicConfig = {
+  semesterStartDate: new Date(2026, 8, 21), // 2학기 시작 월요일 (Month 0-indexed: 8 = September)
+  startWeekNum: 6,                          // 시작 주차
+  endWeekNum: 21,                           // 종료 주차 (졸업식 포함)
+  graduationDate: '2027-01-06',             // 졸업식 날짜
+  allRooms: ['3-1','3-2','3-3','3-4','3-5','3-6','3-7','3-8','3-9','3-10','3-11','3-12'],
+  allBans: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  periodsPerDay: { '월': 6, '화': 7, '수': 6, '목': 7, '금': 6 },
+  // 급식 미운영 키워드 (fullDayEvent에 포함 시 급식 제외)
+  noLunchKeywords: ['추석', '공휴일', '한글날', '수능', '휴업', '성탄절', '신정', '대체공휴일', '정기시험'],
+  // 급식 운영 행사 (fullDayEvent이지만 급식 운영 — 여기 포함되면 급식 카운트)
+  lunchServedKeywords: ['전국연합', '앨범촬영', '가온제']
+};
+
+// ──── HTML Escape Utility ────────────────────────────────────────────────────
+const _escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+export function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, c => _escMap[c]);
+}
+
 export const RollbookModel = {
   /**
    * Parse student and timetable data from '출결사항' (or '취합') CSV
@@ -142,16 +165,17 @@ export const RollbookModel = {
 
   /**
    * Generate Academic Weeks:
-   * 2학기 6주차 (2026.09.21 월) ~ 21주차 (2027.01.06 수 졸업식 / 2027.01.08 금)
+   * 2학기 6주차 ~ 21주차 (설정값 기반 자동 생성)
    */
   getAcademicWeeks() {
     const weeks = [];
-    // Start date: 2026-09-21 (Monday of Week 6)
-    const baseStart = new Date(2026, 8, 21); // Month is 0-indexed (8 = September)
+    const { semesterStartDate, startWeekNum, endWeekNum } = AcademicConfig;
 
-    for (let w = 6; w <= 21; w++) {
-      const offsetDays = (w - 6) * 7;
-      const mon = new Date(baseStart.getTime() + offsetDays * 86400000);
+    const curWeek = this.getCurrentWeekNum();
+
+    for (let w = startWeekNum; w <= endWeekNum; w++) {
+      const offsetDays = (w - startWeekNum) * 7;
+      const mon = new Date(semesterStartDate.getTime() + offsetDays * 86400000);
       const days = [];
 
       for (let d = 0; d < 5; d++) {
@@ -171,15 +195,69 @@ export const RollbookModel = {
         });
       }
 
+      const isCurrent = (w === curWeek);
       weeks.push({
         weekNum: w,
-        label: `2학기 ${w}주차 (${days[0].displayDate} ~ ${days[4].displayDate})`,
+        label: `2학기 ${w}주차 (${days[0].displayDate} ~ ${days[4].displayDate})${isCurrent ? ' ★ [이번 주]' : ''}`,
         shortLabel: `${w}주차`,
+        isCurrent,
         days
       });
     }
 
     return weeks;
+  },
+
+  /**
+   * Get formatted info for today's date
+   */
+  getTodayInfo(customDate = null) {
+    const today = customDate ? new Date(customDate) : new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayName = dayNames[today.getDay()];
+    const currentWeekNum = this.getCurrentWeekNum(today);
+
+    return {
+      dateStr: `${yyyy}-${mm}-${dd}`,
+      display: `${yyyy}.${mm}.${dd} (${dayName})`,
+      currentWeekNum,
+      dateObj: today
+    };
+  },
+
+  /**
+   * Auto-detect current academic week from today's date
+   */
+  getCurrentWeekNum(customDate = null) {
+    const { semesterStartDate, startWeekNum, endWeekNum } = AcademicConfig;
+    const today = customDate ? new Date(customDate) : new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffMs = today.getTime() - semesterStartDate.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    const weekOffset = Math.floor(diffDays / 7);
+    const detected = startWeekNum + weekOffset;
+
+    // Clamp to valid range
+    if (detected < startWeekNum) return startWeekNum;
+    if (detected > endWeekNum) return endWeekNum;
+    return detected;
+  },
+
+  /**
+   * Auto-detect current month for lunch calendar
+   */
+  getCurrentLunchMonth() {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth() + 1;
+    // Clamp to academic period (2026-09 ~ 2027-01)
+    if (y < 2026 || (y === 2026 && m < 9)) return { year: 2026, month: 9 };
+    if (y > 2027 || (y === 2027 && m > 1)) return { year: 2027, month: 1 };
+    return { year: y, month: m };
   },
 
   /**
