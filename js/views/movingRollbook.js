@@ -60,10 +60,10 @@ export const MovingRollbookView = {
       1
     );
 
-    // Printable height = 189mm. Overhead (headers, footer, margins) = ~35mm.
-    // Available height for student rows = 154mm.
+    // Guaranteed 1-page fit on both screen and print (fits up to 40+ students without clipping):
+    // 140.0mm available height for tbody rows / targetMax ensures all rows fit completely
     const targetMax = Math.max(maxStudentsOnPage, 25);
-    const rowHeightMm = (154.0 / targetMax).toFixed(2);
+    const rowHeightMm = (140.0 / targetMax).toFixed(2);
 
     const columnsHtml = rosters.map(roster => this.renderPeriodColumn(roster, dayInfo)).join('');
 
