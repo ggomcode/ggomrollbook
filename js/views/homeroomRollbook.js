@@ -110,13 +110,15 @@ export const HomeroomRollbookView = {
         });
       });
 
+      const displayRemark = RollbookModel.getDisplayRemark(st.pRemark, days);
+
       return `
         <tr class="homeroom-student-row ${darkClass}">
           <td class="col-seq">${idx + 1}</td>
           <td class="col-num">${st.num}</td>
           <td class="col-id">${escapeHtml(st.studentId)}</td>
           <td class="col-name">${escapeHtml(st.name)}</td>
-          <td class="col-remark">${escapeHtml(st.pRemark)}</td>
+          <td class="col-remark">${escapeHtml(displayRemark)}</td>
           ${cellsHtml}
         </tr>
       `;

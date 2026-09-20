@@ -75,7 +75,7 @@ export const MovingRollbookView = {
             <span class="page-period-tag">${periodLabel}</span>
           </div>
           <div class="page-meta">
-            <span class="meta-item">학교: 3학년</span>
+            <span class="meta-item">3학년 출석부</span>
             <span class="meta-item print-timestamp"></span>
           </div>
         </div>
@@ -137,6 +137,7 @@ export const MovingRollbookView = {
       const status = RollbookModel.getStudentPeriodStatus(st, dayInfo.dayOfWeek, roster.periodNum, dayInfo.dateStr);
       const is50Dark = status.is50Dark ? 'row-dark-50' : '';
       const is10Tint = (!status.is50Dark && status.isShaded) ? 'cell-tint-10' : '';
+      const displayRemark = RollbookModel.getDisplayRemark(st.pRemark, dayInfo.dateStr);
 
       return `
         <tr class="student-row ${is50Dark}">
@@ -146,7 +147,7 @@ export const MovingRollbookView = {
           <td class="col-check ${is10Tint}">
             ${escapeHtml(status.text) || '<span class="check-box"></span>'}
           </td>
-          <td class="col-remark">${escapeHtml(st.pRemark)}</td>
+          <td class="col-remark">${escapeHtml(displayRemark)}</td>
         </tr>
       `;
     }).join('');

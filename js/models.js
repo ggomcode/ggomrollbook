@@ -344,6 +344,33 @@ export const RollbookModel = {
   },
 
   /**
+   * Filter remark text based on operational date (e.g. hide '파스' outside PASS operating period)
+   * @param {string} pRemark
+   * @param {string|Object|Array} dateOrDays - 'YYYY-MM-DD', dayInfo object, or array of days
+   */
+  getDisplayRemark(pRemark, dateOrDays) {
+    if (!pRemark) return '';
+    if (!dateOrDays) return pRemark;
+    let isPassActive = false;
+    if (Array.isArray(dateOrDays)) {
+      isPassActive = dateOrDays.some(d => {
+        const dStr = typeof d === 'string' ? d : (d && d.dateStr);
+        return dStr && dStr >= AcademicConfig.passStartDate && dStr <= AcademicConfig.passEndDate;
+      });
+    } else {
+      const dStr = typeof dateOrDays === 'string' ? dateOrDays : (dateOrDays && dateOrDays.dateStr);
+      isPassActive = dStr && dStr >= AcademicConfig.passStartDate && dStr <= AcademicConfig.passEndDate;
+    }
+    if (!isPassActive && (pRemark.includes('파스') || pRemark.includes('패스'))) {
+      return pRemark
+        .replace(/파스|패스/g, '')
+        .replace(/^[,\s/]+|[,\s/]+$/g, '')
+        .trim();
+    }
+    return pRemark;
+  },
+
+  /**
    * Check if a student is eligible for lunch on a specific day
    */
   isStudentEatingLunch(student, dayOfWeek) {
