@@ -34,6 +34,33 @@ export const RollbookModel = {
   parseAttendanceData(csvRows) {
     if (!csvRows || csvRows.length < 4) return [];
 
+    // Dynamically detect timetable column positions from header rows (Row index 1 or 2)
+    const slotColMap = {}; // e.g. '월1' -> 34, '화7' -> 70, '목7' -> 109
+    for (let hIdx = 0; hIdx <= 2; hIdx++) {
+      const headerRow = csvRows[hIdx];
+      if (!headerRow) continue;
+      for (let c = 0; c < headerRow.length; c++) {
+        const val = (headerRow[c] || '').trim();
+        const m = val.match(/^([월화수목금])([1-7])$/);
+        if (m) {
+          const key = `${m[1]}${m[2]}`;
+          if (slotColMap[key] === undefined) {
+            slotColMap[key] = c;
+          }
+        }
+      }
+    }
+
+    // Fallback timetable column layout if headers are missing or not matched:
+    // 월1~6 (34~51), 화1~7 (52~72), 수1~6 (73~90), 목1~7 (91~111), 금1~6 (112~129)
+    const fallbackDayPrefixes = [
+      { day: '월', startCol: 34, maxPeriod: 6 },
+      { day: '화', startCol: 52, maxPeriod: 7 },
+      { day: '수', startCol: 73, maxPeriod: 6 },
+      { day: '목', startCol: 91, maxPeriod: 7 },
+      { day: '금', startCol: 112, maxPeriod: 6 }
+    ];
+
     const students = [];
     // Data starts at row index 3 (0-indexed)
     for (let r = 3; r < csvRows.length; r++) {
@@ -60,27 +87,32 @@ export const RollbookModel = {
 
       const studentId = (row[32] || '').trim() || `${ban}${num.padStart(2, '0')}`;
 
-      // Timetable: 월1~월6 (cols 34-51), 화1~화6 (cols 52-69), 수1~수6 (cols 70-87), 목1~목6 (cols 88-105), 금1~금6 (cols 106-123)
+      // Detect timetable column positions dynamically from header row
+      // (Row index 2 contains '월1', '월2', ..., '화7', ..., '목7', etc.)
       const timetable = {};
-      const dayPrefixes = [
-        { day: '월', startCol: 34, maxPeriod: 6 },
-        { day: '화', startCol: 52, maxPeriod: 6 },
-        { day: '수', startCol: 70, maxPeriod: 6 },
-        { day: '목', startCol: 88, maxPeriod: 6 },
-        { day: '금', startCol: 106, maxPeriod: 6 }
-      ];
-
-      dayPrefixes.forEach(({ day, startCol, maxPeriod }) => {
+      const days = ['월', '화', '수', '목', '금'];
+      days.forEach(day => {
+        const maxPeriod = AcademicConfig.periodsPerDay[day] || 6;
         for (let p = 1; p <= maxPeriod; p++) {
-          const c = startCol + (p - 1) * 3;
-          let subj = (row[c] || '').trim();
-          let teacher = (row[c + 1] || '').trim();
-          let room = (row[c + 2] || '').trim();
+          const key = `${day}${p}`;
+          let c = slotColMap[key];
+          if (c === undefined) {
+            // Fallback calculation: 월(34~51, 6개), 화(52~72, 7개), 수(73~90, 6개), 목(91~111, 7개), 금(112~129, 6개)
+            const fallbackDay = fallbackDayPrefixes.find(f => f.day === day);
+            if (fallbackDay && p <= fallbackDay.maxPeriod) {
+              c = fallbackDay.startCol + (p - 1) * 3;
+            }
+          }
 
-          // Normalization: clean classroom string e.g. "3-1", "3-12"
-          room = this.normalizeRoom(room, subj);
-
-          timetable[`${day}${p}`] = { subj, teacher, room };
+          if (c !== undefined && c < row.length) {
+            let subj = (row[c] || '').trim();
+            let teacher = (row[c + 1] || '').trim();
+            let room = (row[c + 2] || '').trim();
+            room = this.normalizeRoom(room, subj);
+            timetable[key] = { subj, teacher, room };
+          } else {
+            timetable[key] = { subj: '', teacher: '', room: '-' };
+          }
         }
       });
 
