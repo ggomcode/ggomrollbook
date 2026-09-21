@@ -93,7 +93,8 @@ class App {
       this.updateStatusIndicator();
     } catch (err) {
       console.error('Error loading data:', err);
-      alert('데이터를 불러오는 중 오류가 발생했습니다. 오프라인 기본 데이터를 사용합니다.');
+      alert('구글 시트 데이터를 불러오는 중 오류가 발생했습니다. 인터넷 연결 또는 구글 시트 권한을 확인해 주세요.');
+      this.updateStatusIndicator();
     } finally {
       this.showLoading(false);
     }
@@ -108,13 +109,13 @@ class App {
     const el = document.getElementById('syncStatus');
     if (!el) return;
 
-    const count = this.state.allStudents.length;
+    const count = this.state.allStudents ? this.state.allStudents.length : 0;
     if (this.state.isLive) {
       el.className = 'status-badge status-live';
       el.innerHTML = `<span class="status-dot"></span>구글 시트 실시간 연결됨 (${count}명)`;
     } else {
       el.className = 'status-badge status-offline';
-      el.innerHTML = `<span class="status-dot"></span>캐시 데이터 사용 중 (${count}명)`;
+      el.innerHTML = `<span class="status-dot"></span>구글 시트 연결 실패`;
     }
   }
 

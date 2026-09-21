@@ -40,7 +40,7 @@ export const SheetAPI = {
     let isLive = false;
 
     try {
-      // Attempt live fetch for attendance, holidays, and records sheet
+      // Live fetch for attendance, holidays, and records sheet
       const [attData, holData, recData] = await Promise.all([
         this.fetchSheetCsv(this.gidAttendance),
         this.fetchSheetCsv(this.gidHolidays),
@@ -51,11 +51,8 @@ export const SheetAPI = {
       recordsCsv = recData;
       isLive = true;
     } catch (err) {
-      console.warn('Live Google Sheets fetch failed, falling back to local cached data:', err);
-      // Fallback to embedded default data
-      attendanceCsv = window.DEFAULT_ATTENDANCE_CSV || '';
-      holidaysCsv = window.DEFAULT_HOLIDAYS_CSV || '';
-      isLive = false;
+      console.error('Live Google Sheets fetch failed:', err);
+      throw err;
     }
 
     return {
