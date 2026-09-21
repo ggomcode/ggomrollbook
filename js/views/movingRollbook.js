@@ -145,8 +145,9 @@ export const MovingRollbookView = {
       const is10Tint = (!status.is50Dark && status.isShaded) ? 'cell-tint-10' : '';
       const isOverriddenClass = status.isOverridden ? `cell-overridden status-${status.category}` : '';
       const isDocSubmitted = status.docSubmitted ? 'doc-submitted' : '';
-      const displayRemark = RollbookModel.getEffectiveDisplayRemark(st.pRemark, st.studentId, dayInfo, overridesMap, showSpecialStudents, st);
       const baseRemark = RollbookModel.getDisplayRemark(st.pRemark, dayInfo.dateStr, showSpecialStudents);
+      const periodStatusRemark = RollbookModel.getStatusRemarkText(status.rawStatus);
+      const displayRemark = (baseRemark && periodStatusRemark) ? `${baseRemark}, ${periodStatusRemark}` : (periodStatusRemark || baseRemark);
 
       const currentStatusText = status.text || '';
       const rawStatusValue = status.rawStatus || currentStatusText;

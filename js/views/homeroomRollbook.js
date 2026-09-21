@@ -75,6 +75,7 @@ export const HomeroomRollbookView = {
 
     // Student rows
     const showSpecialStudents = !!options.showSpecialStudents;
+    const overridesMap = options.overridesMap || null;
     const rowsHtml = students.map((st, idx) => {
       const isDarkRow = (st.pRemark.includes('자퇴') || st.pRemark.includes('위탁') || st.pRemark.includes('전출'));
       const darkClass = isDarkRow ? 'row-dark-50' : '';
@@ -83,8 +84,6 @@ export const HomeroomRollbookView = {
       daySpecs.forEach((spec, dIdx) => {
         const dayInfo = days[dIdx];
         const isHoliday = !!holidaysMap.fullDayEvents[dayInfo.dateStr];
-
-        const overridesMap = options.overridesMap || null;
 
         spec.periods.forEach((p, pIdx) => {
           let cellText = '';
@@ -186,8 +185,6 @@ export const HomeroomRollbookView = {
         </tr>
       `;
     }).join('');
-
-    const overridesMap = options.overridesMap || null;
 
     // Daily summary tfoot rows
     const presenceRowHtml = daySpecs.map((spec, dIdx) => {

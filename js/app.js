@@ -20,7 +20,7 @@ class App {
     this.todayInfo = RollbookModel.getTodayInfo();
 
     this.state = {
-      view: 'moving', // 'moving' | 'homeroom' | 'lunch' | 'finder' | 'today' | 'absence'
+      view: 'homeroom', // 'moving' | 'homeroom' | 'lunch' | 'finder' | 'today' | 'absence'
       absenceFilters: { grade: '3', ban: '', num: '', name: '', month: '', printStatus: 'all' },
       absenceRegistryRecords: [],
       allStudents: [],
@@ -1191,8 +1191,10 @@ class App {
     });
     if (this.undoStack.length > 50) this.undoStack.shift();
 
+    const isBackToOriginal = RollbookModel.isStatusEquivalent(nextStatus, originalStatus);
+
     // Update memory map
-    if (!nextStatus || nextStatus === '출석') {
+    if (isBackToOriginal) {
       this.state.attendanceOverrides.delete(key);
     } else {
       this.state.attendanceOverrides.set(key, {
@@ -1214,18 +1216,33 @@ class App {
     this.updateRemarkDom(studentId);
     this.updateStatsDom(cellEl);
 
-    // Schedule background GAS save
-    this.scheduleSaveToGas({
-      key,
-      date,
-      period,
-      studentId,
-      ban,
-      num,
-      name,
-      room,
-      status: nextStatus
-    });
+    // Schedule background GAS save / delete
+    if (isBackToOriginal) {
+      this.scheduleSaveToGas({
+        key,
+        date,
+        period,
+        studentId,
+        ban,
+        num,
+        name,
+        room,
+        status: '',
+        action: 'delete'
+      });
+    } else {
+      this.scheduleSaveToGas({
+        key,
+        date,
+        period,
+        studentId,
+        ban,
+        num,
+        name,
+        room,
+        status: nextStatus
+      });
+    }
   }
 
   applyBatchAttendance(cellEl, targetStatus) {
@@ -1252,8 +1269,22 @@ class App {
         cellInfo: { ...c.dataset }
       });
 
-      if (!targetStatus || targetStatus === '출석') {
+      const isBackToOriginal = RollbookModel.isStatusEquivalent(targetStatus, origStatus);
+
+      if (isBackToOriginal) {
         this.state.attendanceOverrides.delete(key);
+        recordsToSave.push({
+          key,
+          date,
+          period,
+          studentId,
+          ban,
+          num,
+          name,
+          room: c.dataset.room || '',
+          status: '',
+          action: 'delete'
+        });
       } else {
         this.state.attendanceOverrides.set(key, {
           key,
@@ -1267,21 +1298,20 @@ class App {
           status: targetStatus,
           updatedAt: new Date().toISOString()
         });
+        recordsToSave.push({
+          key,
+          date,
+          period,
+          studentId,
+          ban,
+          num,
+          name,
+          room: c.dataset.room || '',
+          status: targetStatus
+        });
       }
 
       this.updateCellDom(c, targetStatus, origStatus);
-
-      recordsToSave.push({
-        key,
-        date,
-        period,
-        studentId,
-        ban,
-        num,
-        name,
-        room: c.dataset.room || '',
-        status: targetStatus
-      });
     });
 
     this.updateRemarkDom(studentId);
@@ -1324,21 +1354,49 @@ class App {
         cellInfo: { ...c.dataset }
       });
 
-      this.state.attendanceOverrides.delete(key);
+      const isBackToOriginal = RollbookModel.isStatusEquivalent('', originalStatus);
+      if (isBackToOriginal) {
+        this.state.attendanceOverrides.delete(key);
+        recordsToSave.push({
+          key,
+          date,
+          period,
+          studentId,
+          ban,
+          num,
+          name,
+          room: room || '',
+          status: '',
+          action: 'delete'
+        });
+      } else {
+        this.state.attendanceOverrides.set(key, {
+          key,
+          date,
+          period: parseInt(period, 10) || period,
+          studentId,
+          ban,
+          num,
+          name,
+          room: room || '',
+          status: '',
+          updatedAt: new Date().toISOString()
+        });
+        recordsToSave.push({
+          key,
+          date,
+          period,
+          studentId,
+          ban,
+          num,
+          name,
+          room: room || '',
+          status: ''
+        });
+      }
+
       this.updateCellDom(c, '', originalStatus);
       changedStudentIds.add(studentId);
-
-      recordsToSave.push({
-        key,
-        date,
-        period,
-        studentId,
-        ban,
-        num,
-        name,
-        room: room || '',
-        status: ''
-      });
     });
 
     // Update remarks for all changed students
@@ -1357,24 +1415,31 @@ class App {
 
   updateCellDom(cellEl, statusText, originalStatus) {
     cellEl.dataset.currentStatus = statusText;
-    const isOverridden = (statusText !== (originalStatus || ''));
+    const isOverridden = !RollbookModel.isStatusEquivalent(statusText, originalStatus);
 
     cellEl.classList.toggle('cell-overridden', isOverridden);
 
     // Remove all old category classes
     cellEl.classList.remove('status-jilbyeong', 'status-miinjeong', 'status-saenggyeol', 'status-cheheom', 'status-gyeongjosa', 'status-jeonyeom', 'status-gita', 'status-present');
 
-    const cat = RollbookModel.getCategoryFromRawStatus(statusText);
-    if (cat === 'jilbyeong') cellEl.classList.add('status-jilbyeong');
-    else if (cat === 'miinjeong') cellEl.classList.add('status-miinjeong');
-    else if (cat === 'saenggyeol') cellEl.classList.add('status-saenggyeol');
-    else if (cat === 'cheheom') cellEl.classList.add('status-cheheom');
-    else if (cat === 'gyeongjosa') cellEl.classList.add('status-gyeongjosa');
-    else if (cat === 'jeonyeom') cellEl.classList.add('status-jeonyeom');
-    else if (cat === 'gita') cellEl.classList.add('status-gita');
-    else if (cat === 'present' && isOverridden) cellEl.classList.add('status-present');
+    if (isOverridden) {
+      const cat = RollbookModel.getCategoryFromRawStatus(statusText);
+      if (cat === 'jilbyeong') cellEl.classList.add('status-jilbyeong');
+      else if (cat === 'miinjeong') cellEl.classList.add('status-miinjeong');
+      else if (cat === 'saenggyeol') cellEl.classList.add('status-saenggyeol');
+      else if (cat === 'cheheom') cellEl.classList.add('status-cheheom');
+      else if (cat === 'gyeongjosa') cellEl.classList.add('status-gyeongjosa');
+      else if (cat === 'jeonyeom') cellEl.classList.add('status-jeonyeom');
+      else if (cat === 'gita') cellEl.classList.add('status-gita');
+      else if (cat === 'present') cellEl.classList.add('status-present');
+    }
 
-    cellEl.classList.toggle('cell-tint-10', !!statusText);
+    // Determine 10% tint shading
+    const isPresent = (!statusText || statusText === '출석');
+    const orig = (originalStatus || '').trim();
+    const isOriginalShaded = !!(orig && orig !== '출석');
+    const shouldBeShaded = isOverridden ? !isPresent : isOriginalShaded;
+    cellEl.classList.toggle('cell-tint-10', shouldBeShaded);
 
     // Narrow cell displays 1 character (e.g. '인' for '인(생리)', '인(체험)', etc.)
     const displayText = RollbookModel.getStatusDisplayText(statusText);
@@ -1394,6 +1459,18 @@ class App {
     remarkCells.forEach(cell => {
       const baseRemark = cell.dataset.baseRemark || '';
       const tr = cell.closest('tr');
+
+      // 1. Moving Rollbook view (single period column): keep it clean and period-specific
+      const periodCol = cell.closest('.period-column');
+      if (periodCol) {
+        const periodCell = tr ? tr.querySelector('.interactive-cell[data-period]') : null;
+        const currentStatus = periodCell ? (periodCell.dataset.currentStatus || '') : '';
+        const periodRemark = RollbookModel.getStatusRemarkText(currentStatus);
+        cell.textContent = (baseRemark && periodRemark) ? `${baseRemark}, ${periodRemark}` : (periodRemark || baseRemark);
+        return;
+      }
+
+      // 2. Multi-period / Homeroom view:
       const dateCells = tr ? tr.querySelectorAll('.interactive-cell[data-date]') : [];
       const dates = Array.from(new Set(Array.from(dateCells).map(c => c.dataset.date))).filter(Boolean);
 
@@ -1495,8 +1572,22 @@ class App {
 
     if (item.type === 'single') {
       const { key, prevStatus, cellInfo } = item;
-      if (!prevStatus || prevStatus === '출석') {
+      const isBackToOriginal = RollbookModel.isStatusEquivalent(prevStatus, cellInfo.originalStatus);
+
+      if (isBackToOriginal) {
         this.state.attendanceOverrides.delete(key);
+        recordsToRevert.push({
+          key,
+          date: cellInfo.date,
+          period: cellInfo.period,
+          studentId: cellInfo.studentId,
+          ban: cellInfo.ban,
+          num: cellInfo.num,
+          name: cellInfo.name,
+          room: cellInfo.room,
+          status: '',
+          action: 'delete'
+        });
       } else {
         this.state.attendanceOverrides.set(key, {
           key,
@@ -1510,6 +1601,17 @@ class App {
           status: prevStatus,
           updatedAt: new Date().toISOString()
         });
+        recordsToRevert.push({
+          key,
+          date: cellInfo.date,
+          period: cellInfo.period,
+          studentId: cellInfo.studentId,
+          ban: cellInfo.ban,
+          num: cellInfo.num,
+          name: cellInfo.name,
+          room: cellInfo.room,
+          status: prevStatus
+        });
       }
 
       // Update visible cell if currently rendered
@@ -1519,26 +1621,28 @@ class App {
         this.updateStatsDom(cellEl);
       }
       this.updateRemarkDom(cellInfo.studentId);
-
-      recordsToRevert.push({
-        key,
-        date: cellInfo.date,
-        period: cellInfo.period,
-        studentId: cellInfo.studentId,
-        ban: cellInfo.ban,
-        num: cellInfo.num,
-        name: cellInfo.name,
-        room: cellInfo.room,
-        status: prevStatus
-      });
     } else if (item.type === 'batch') {
       let studentIdToUpdate = null;
       let lastCell = null;
       item.records.forEach(rec => {
         const { key, prevStatus, cellInfo } = rec;
         studentIdToUpdate = cellInfo.studentId;
-        if (!prevStatus || prevStatus === '출석') {
+        const isBackToOriginal = RollbookModel.isStatusEquivalent(prevStatus, cellInfo.originalStatus);
+
+        if (isBackToOriginal) {
           this.state.attendanceOverrides.delete(key);
+          recordsToRevert.push({
+            key,
+            date: cellInfo.date,
+            period: cellInfo.period,
+            studentId: cellInfo.studentId,
+            ban: cellInfo.ban,
+            num: cellInfo.num,
+            name: cellInfo.name,
+            room: cellInfo.room,
+            status: '',
+            action: 'delete'
+          });
         } else {
           this.state.attendanceOverrides.set(key, {
             key,
@@ -1552,6 +1656,17 @@ class App {
             status: prevStatus,
             updatedAt: new Date().toISOString()
           });
+          recordsToRevert.push({
+            key,
+            date: cellInfo.date,
+            period: cellInfo.period,
+            studentId: cellInfo.studentId,
+            ban: cellInfo.ban,
+            num: cellInfo.num,
+            name: cellInfo.name,
+            room: cellInfo.room,
+            status: prevStatus
+          });
         }
 
         const cellEl = document.querySelector(`.interactive-cell[data-student-id="${cellInfo.studentId}"][data-date="${cellInfo.date}"][data-period="${cellInfo.period}"]`);
@@ -1559,18 +1674,6 @@ class App {
           this.updateCellDom(cellEl, prevStatus, cellInfo.originalStatus);
           lastCell = cellEl;
         }
-
-        recordsToRevert.push({
-          key,
-          date: cellInfo.date,
-          period: cellInfo.period,
-          studentId: cellInfo.studentId,
-          ban: cellInfo.ban,
-          num: cellInfo.num,
-          name: cellInfo.name,
-          room: cellInfo.room,
-          status: prevStatus
-        });
       });
 
       if (studentIdToUpdate) {

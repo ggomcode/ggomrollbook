@@ -442,13 +442,50 @@ export const RollbookModel = {
   },
 
   /**
+   * Check if two attendance statuses are equivalent
+   */
+  isStatusEquivalent(statusA, statusB) {
+    const a = (statusA || '').trim();
+    const b = (statusB || '').trim();
+    if (a === b) return true;
+
+    const isPresentA = (!a || a === '출석');
+    const isPresentB = (!b || b === '출석');
+    if (isPresentA && isPresentB) return true;
+    if (isPresentA !== isPresentB) return false;
+
+    const normalize = (s) => {
+      if (s === '병' || s === '질병' || s === '병결') return '병';
+      if (s === '미' || s === '미인정' || s === '무단') return '미';
+      if (s === '기' || s === '기타') return '기';
+      if (s === '생' || s === '생리' || s === '생결' || s === '인(생리)') return '생리';
+      if (s === '체' || s === '체험' || s === '인(체험)') return '체험';
+      if (s === '경' || s === '경조사' || s === '인(경조사)') return '경조사';
+      if (s === '전' || s === '전염병' || s === '인(전염병)') return '전염병';
+      if (s === '특' || s.includes('특수')) return '특';
+      if (s === '파' || s.includes('파스') || s.includes('패스')) return '파';
+      if (s === '순' || s.includes('순회')) return '순';
+      return s;
+    };
+
+    return normalize(a) === normalize(b);
+  },
+
+  /**
    * Get effective status taking overridesMap into account
    */
   getEffectiveStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null, showSpecialStudent = false, overridesMap = null) {
+    const def = this.getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr, showSpecialStudent);
     const key = `${dateStr}_${periodNum}_${student.studentId}`;
     if (overridesMap && overridesMap.has(key)) {
       const rec = overridesMap.get(key);
       const rawStatus = (rec.status || '').trim();
+
+      // If override value matches the student's original status, it is not an override
+      if (this.isStatusEquivalent(rawStatus, def.text)) {
+        return { ...def, rawStatus: def.text, remarkText: '', isOverridden: false, docSubmitted: false };
+      }
+
       if (!rawStatus || rawStatus === '출석') {
         return { text: '', rawStatus: '', remarkText: '', isShaded: false, is50Dark: false, isPresent: true, category: 'present', isOverridden: true };
       }
@@ -468,7 +505,6 @@ export const RollbookModel = {
         docSubmitted: !!rec.docSubmitted
       };
     }
-    const def = this.getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr, showSpecialStudent);
     return { ...def, rawStatus: def.text, remarkText: '', isOverridden: false, docSubmitted: false };
   },
 

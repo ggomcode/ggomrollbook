@@ -109,24 +109,38 @@ function doPost(e) {
       }
     }
 
+    const rowsToDelete = [];
     records.forEach(rec => {
       const key = rec.key || `${rec.date}_${rec.period}_${rec.studentId}`;
       const status = (rec.status || '').trim();
+      const isDelete = (rec.action === 'delete' || !status || status === '출석');
       const docSub = rec.docSubmitted ? '제출' : '';
+
       if (keyMap[key]) {
-        if (!status || status === '출석') {
-          sheet.getRange(keyMap[key], 8).setValue('');
-          sheet.getRange(keyMap[key], 9).setValue(nowStr);
-          sheet.getRange(keyMap[key], 10).setValue(docSub);
+        if (isDelete) {
+          rowsToDelete.push(keyMap[key]);
         } else {
           sheet.getRange(keyMap[key], 8).setValue(status);
           sheet.getRange(keyMap[key], 9).setValue(nowStr);
           sheet.getRange(keyMap[key], 10).setValue(docSub);
         }
-      } else if (status && status !== '출석') {
+      } else if (!isDelete) {
         sheet.appendRow([key, rec.date, rec.period, rec.ban, rec.num, rec.name, rec.room || '', status, nowStr, docSub]);
       }
     });
+
+    // Delete rows in descending order to prevent index shifts
+    if (rowsToDelete.length > 0) {
+      const sortedRows = Array.from(new Set(rowsToDelete)).sort((a, b) => b - a);
+      sortedRows.forEach(rowIdx => {
+        try {
+          sheet.deleteRow(rowIdx);
+        } catch(delErr) {
+          // Fallback to clearing contents if deleteRow fails
+          sheet.getRange(rowIdx, 1, 1, 10).clearContent();
+        }
+      });
+    }
 
     return ContentService.createTextOutput(JSON.stringify({ status: 'success' })).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
