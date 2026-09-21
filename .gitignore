@@ -5,3 +5,8 @@ Desktop.ini
 
 # Logs
 *.log
+
+# Sensitive student data & CSV exports
+*.csv
+data/*.csv
+data/export/
