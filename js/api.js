@@ -8,22 +8,24 @@ const GID_ATTENDANCE = '923106420'; // 출결사항 (구 취합)
 const GID_HOLIDAYS = '969683114';   // 행사및휴일
 const SHEET_NAME_RECORDS = '출결기록'; // 사용자 추가 시트
 
-// Default or configured GAS Web App URL
-let _configuredGasUrl = localStorage.getItem('ggom_gas_webapp_url') || '';
+// Deployed Google Apps Script (GAS) Web App URL for real-time sheet sync
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwmLRX6kyuS3NTTeCLk0T7PB-Zk-tZlfFsTnjOyvdwlcGn03PAbufa8s4MbYJs8nFI/exec';
+let _configuredGasUrl = localStorage.getItem('ggom_gas_webapp_url') || DEFAULT_GAS_URL;
 
 export const SheetAPI = {
   sheetId: SHEET_ID,
   gidAttendance: GID_ATTENDANCE,
   gidHolidays: GID_HOLIDAYS,
   sheetNameRecords: SHEET_NAME_RECORDS,
+  defaultGasUrl: DEFAULT_GAS_URL,
 
   getGasUrl() {
-    return _configuredGasUrl || localStorage.getItem('ggom_gas_webapp_url') || '';
+    return _configuredGasUrl || localStorage.getItem('ggom_gas_webapp_url') || DEFAULT_GAS_URL;
   },
 
   setGasUrl(url) {
-    _configuredGasUrl = (url || '').trim();
-    if (_configuredGasUrl) {
+    _configuredGasUrl = (url || '').trim() || DEFAULT_GAS_URL;
+    if (_configuredGasUrl && _configuredGasUrl !== DEFAULT_GAS_URL) {
       localStorage.setItem('ggom_gas_webapp_url', _configuredGasUrl);
     } else {
       localStorage.removeItem('ggom_gas_webapp_url');

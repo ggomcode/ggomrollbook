@@ -477,7 +477,7 @@
 
     <script>
         // 배포된 GAS 웹훅 URL (여기에 URL을 입력해 두면 모든 학생/학부모 기기에서 자동 적용됩니다)
-        const CONFIG_WEBHOOK_URL = '';
+        const CONFIG_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwmLRX6kyuS3NTTeCLk0T7PB-Zk-tZlfFsTnjOyvdwlcGn03PAbufa8s4MbYJs8nFI/exec';
         const urlParams = new URLSearchParams(window.location.search);
         const DEFAULT_GAS_URL = CONFIG_WEBHOOK_URL || urlParams.get('api') || localStorage.getItem('ggom_gas_webapp_url') || '';
 
