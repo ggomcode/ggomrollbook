@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>온라인 결석계 제출 시스템</title>
+    <style>
+        :root {
+            --primary: #4A86E8;
+            --primary-dark: #3b6ec2;
+            --bg: #f8f9fa;
+            --border: #dee2e6;
+            --text: #212529;
+            --radius: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 15px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 780px;
+            margin: auto;
+            background: white;
+            padding: 25px 30px;
+            border-radius: var(--radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .app-header {
+            background: linear-gradient(135deg, #4A86E8, #2a5298);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: var(--radius);
+            margin-bottom: 25px;
+        }
+
+        .app-header h1 {
+            font-size: 22px;
+            margin-bottom: 6px;
+        }
+
+        .app-header p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .section {
+            border: 1px solid var(--border);
+            padding: 18px 20px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            background: #fff;
+        }
+
+        .section-title {
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 14px;
+            border-left: 4px solid var(--primary);
+            padding-left: 10px;
+            font-size: 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .item {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 15px;
+            outline: none;
+            transition: 0.2s;
+            background: #fff;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 134, 232, 0.15);
+        }
+
+        .radio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            background: #f1f3f5;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .sig-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .sig-box {
+            flex: 1;
+            min-width: 260px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fafbfc;
+        }
+
+        .canvas-wrap {
+            border: 1px dashed #adb5bd;
+            border-radius: 6px;
+            background: #fff;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 140px;
+            display: block;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .btn-clear {
+            padding: 5px 12px;
+            font-size: 12px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            float: right;
+        }
+
+        .btn-clear:hover {
+            background: #dee2e6;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-submit:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        /* 완료 팝업 모달 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-box {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-box h3 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .modal-box p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-modal {
+            padding: 10px 18px;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-print-direct {
+            background: #20c997;
+            color: white;
+        }
+
+        .btn-close-modal {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        /* 브라우저 직접 인쇄 시 전용 양식 */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container,
+            .modal {
+                display: none !important;
+            }
+
+            #printSection {
+                display: block !important;
+            }
+        }
+
+        #printSection {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="app-header">
+            <h1>📝 결석(지각·조퇴·결과)계 온라인 제출</h1>
+            <p>포곡고등학교 학생 및 학부모 결석계 전자 제출 시스템</p>
+        </div>
+
+        <form id="absenceForm" onsubmit="handleSubmit(event)">
+            <!-- 1. 학생 인적사항 -->
+            <div class="section">
+                <div class="section-title">1. 학생 인적사항</div>
+                <div class="row">
+                    <div class="item">
+                        <label for="gradeSelect">학년</label>
+                        <select id="gradeSelect" required>
+                            <option value="3" selected>3학년</option>
+                            <option value="1">1학년</option>
+                            <option value="2">2학년</option>
+                        </select>
+                    </div>
+                    <div class="item">
+                        <label for="classSelect">반</label>
+                        <select id="classSelect" required>
+                            <option value="">선택</option>
+                            <option value="1">1반</option>
+                            <option value="2">2반</option>
+                            <option value="3">3반</option>
+                            <option value="4">4반</option>
+                            <option value="5">5반</option>
+                            <option value="6">6반</option>
+                            <option value="7">7반</option>
+                            <option value="8">8반</option>
+                            <option value="9">9반</option>
+                            <option value="10">10반</option>
+                            <option value="11">11반</option>
+                        </select>
+                    </div>
+                    <div class="item">
+                        <label for="numberSelect">번호</label>
+                        <select id="numberSelect" required>
+                            <option value="">선택</option>
+                        </select>
+                    </div>
+                    <div class="item">
+                        <label for="nameInput">학생 성명</label>
+                        <input type="text" id="nameInput" placeholder="이름 입력" required maxlength="10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 결석 구분 및 종류 -->
+            <div class="section">
+                <div class="section-title">2. 출결 변동 구분 및 사유 종류</div>
+                <label>구분 선택</label>
+                <div class="radio-grid" style="margin-bottom: 14px;">
+                    <label class="radio-item"><input type="radio" name="cat" value="결석" checked onchange="handleCatChange()"> 결석</label>
+                    <label class="radio-item"><input type="radio" name="cat" value="지각" onchange="handleCatChange()"> 지각</label>
+                    <label class="radio-item"><input type="radio" name="cat" value="조퇴" onchange="handleCatChange()"> 조퇴</label>
+                    <label class="radio-item"><input type="radio" name="cat" value="결과" onchange="handleCatChange()"> 결과</label>
+                </div>
+
+                <label>종류 선택</label>
+                <div class="radio-grid" style="margin-bottom: 14px;">
+                    <label class="radio-item"><input type="radio" name="type" value="질병" checked onchange="handleTypeChange()"> 질병</label>
+                    <label class="radio-item"><input type="radio" name="type" value="생리통" onchange="handleTypeChange()"> 인정(생리통)</label>
+                    <label class="radio-item"><input type="radio" name="type" value="출석인정" onchange="handleTypeChange()"> 출석인정(기타)</label>
+                    <label class="radio-item"><input type="radio" name="type" value="기타" onchange="handleTypeChange()"> 기타</label>
+                </div>
+
+                <div id="subTypeDiv" style="display: none; background: #e7f5ff; padding: 12px; border-radius: 8px; margin-top: 10px;">
+                    <label style="color: #1c7ed6;">출석인정 세부 사유:</label>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <label class="radio-item"><input type="radio" name="subType" value="체험" checked> 교외체험학습</label>
+                        <label class="radio-item"><input type="radio" name="subType" value="경조사"> 경조사</label>
+                        <label class="radio-item"><input type="radio" name="subType" value="전염병"> 법정감염병</label>
+                        <label class="radio-item"><input type="radio" name="subType" value="대입"> 대입면접/시험</label>
+                        <label class="radio-item"><input type="radio" name="subType" value="기타"> 기타인정</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 결석 기간 및 교시 -->
+            <div class="section">
+                <div class="section-title">3. 기간 및 교시</div>
+                <div class="row">
+                    <div class="item">
+                        <label for="startDate">시작일</label>
+                        <input type="date" id="startDate" required onchange="calcDays()">
+                    </div>
+                    <div class="item" id="startPeriodDiv" style="display: none;">
+                        <label for="startPeriod">시작 교시</label>
+                        <select id="startPeriod">
+                            <option value="1">1교시</option>
+                            <option value="2">2교시</option>
+                            <option value="3">3교시</option>
+                            <option value="4">4교시</option>
+                            <option value="5">5교시</option>
+                            <option value="6">6교시</option>
+                            <option value="7">7교시</option>
+                        </select>
+                    </div>
+                    <div class="item">
+                        <label for="endDate">종료일</label>
+                        <input type="date" id="endDate" required onchange="calcDays()">
+                    </div>
+                    <div class="item" id="endPeriodDiv" style="display: none;">
+                        <label for="endPeriod">종료 교시</label>
+                        <select id="endPeriod">
+                            <option value="1">1교시</option>
+                            <option value="2">2교시</option>
+                            <option value="3">3교시</option>
+                            <option value="4">4교시</option>
+                            <option value="5">5교시</option>
+                            <option value="6">6교시</option>
+                            <option value="7" selected>7교시</option>
+                        </select>
+                    </div>
+                    <div class="item" style="max-width: 100px;">
+                        <label>총 일수</label>
+                        <input type="text" id="totalDays" value="1일간" readonly style="background: #f1f3f5; font-weight: bold; text-align: center;">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="reasonInput">결석 사유 (구체적으로 기재)</label>
+                    <textarea id="reasonInput" rows="2" placeholder="예: 감기 몸살로 인한 병원 진료 및 가정 안정" required></textarea>
+                </div>
+            </div>
+
+            <!-- 4. 전자 서명 -->
+            <div class="section">
+                <div class="section-title">4. 학생 및 학부모 확인 서명</div>
+                <div class="row">
+                    <div class="item">
+                        <label for="parentName">학부모 성명</label>
+                        <input type="text" id="parentName" placeholder="학부모 성함 입력" required maxlength="10">
+                    </div>
+                    <div class="item">
+                        <label for="writeDate">작성 일자</label>
+                        <input type="date" id="writeDate" required>
+                    </div>
+                </div>
+
+                <div class="sig-container">
+                    <div class="sig-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="margin:0;">학생 서명란</label>
+                            <button type="button" class="btn-clear" onclick="clearSig('studentCanvas')">지우기</button>
+                        </div>
+                        <div class="canvas-wrap">
+                            <canvas id="studentCanvas"></canvas>
+                        </div>
+                        <div style="font-size: 11px; color: #868e96; text-align: center;">위 사각형 안에 터치/마우스로 서명하세요.</div>
+                    </div>
+
+                    <div class="sig-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="margin:0;">학부모 서명란</label>
+                            <button type="button" class="btn-clear" onclick="clearSig('parentCanvas')">지우기</button>
+                        </div>
+                        <div class="canvas-wrap">
+                            <canvas id="parentCanvas"></canvas>
+                        </div>
+                        <div style="font-size: 11px; color: #868e96; text-align: center;">위 사각형 안에 터치/마우스로 서명하세요.</div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit" id="submitBtn">📄 결석계 제출하기</button>
+        </form>
+    </div>
+
+    <!-- 제출 완료 안내 모달 -->
+    <div class="modal" id="successModal">
+        <div class="modal-box">
+            <div style="font-size: 40px; margin-bottom: 10px;">✅</div>
+            <h3>결석계 제출 완료</h3>
+            <p>결석계가 정상적으로 등록되었습니다.<br>출석 인정 또는 질병 결석에 필요한 진료확인서/증빙서류는 등교 시 담임선생님께 제출해 주세요.</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-print-direct" onclick="triggerClientPrint()">🖨️ 결석계 즉시 인쇄</button>
+                <button type="button" class="btn-modal btn-close-modal" onclick="closeSuccessModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- A4 인쇄용 서식 (CSS @media print 연동) -->
+    <div id="printSection"></div>
+
+    <script>
+        // 배포된 GAS 웹훅 URL (여기에 URL을 입력해 두면 모든 학생/학부모 기기에서 자동 적용됩니다)
+        const CONFIG_WEBHOOK_URL = '';
+        const urlParams = new URLSearchParams(window.location.search);
+        const DEFAULT_GAS_URL = CONFIG_WEBHOOK_URL || urlParams.get('api') || localStorage.getItem('ggom_gas_webapp_url') || '';
+
+        // 1. 초기 번호 옵션 생성
+        window.addEventListener('DOMContentLoaded', () => {
+            const numSel = document.getElementById('numberSelect');
+            for (let i = 1; i <= 35; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.text = i + '번';
+                numSel.appendChild(opt);
+            }
+
+            // 오늘 날짜 설정
+            const today = new Date().toISOString().substring(0, 10);
+            document.getElementById('startDate').value = today;
+            document.getElementById('endDate').value = today;
+            document.getElementById('writeDate').value = today;
+
+            // URL 파라미터 기반 자동 완성 (출석부 연동 링크 지원)
+            if (urlParams.get('grade')) document.getElementById('gradeSelect').value = urlParams.get('grade');
+            if (urlParams.get('ban') || urlParams.get('class')) document.getElementById('classSelect').value = urlParams.get('ban') || urlParams.get('class');
+            if (urlParams.get('num') || urlParams.get('number')) document.getElementById('numberSelect').value = urlParams.get('num') || urlParams.get('number');
+            if (urlParams.get('name')) document.getElementById('nameInput').value = urlParams.get('name');
+            if (urlParams.get('date')) {
+                document.getElementById('startDate').value = urlParams.get('date');
+                document.getElementById('endDate').value = urlParams.get('date');
+                document.getElementById('writeDate').value = urlParams.get('date');
+            }
+            if (urlParams.get('cat')) {
+                const catRadio = document.querySelector(`input[name="cat"][value="${urlParams.get('cat')}"]`);
+                if (catRadio) { catRadio.checked = true; handleCatChange(); }
+            }
+            if (urlParams.get('type')) {
+                const typeRadio = document.querySelector(`input[name="type"][value="${urlParams.get('type')}"]`);
+                if (typeRadio) { typeRadio.checked = true; handleTypeChange(); }
+            }
+            if (urlParams.get('subType')) {
+                const subRadio = document.querySelector(`input[name="subType"][value="${urlParams.get('subType')}"]`);
+                if (subRadio) subRadio.checked = true;
+            }
+            if (urlParams.get('reason')) document.getElementById('reasonInput').value = urlParams.get('reason');
+
+            initCanvas('studentCanvas');
+            initCanvas('parentCanvas');
+        });
+
+        // 2. 캔버스 서명패드 초기화
+        const canvases = {};
+        function initCanvas(id) {
+            const canvas = document.getElementById(id);
+            const ctx = canvas.getContext('2d');
+            canvases[id] = { canvas, ctx, hasSignature: false };
+
+            // 고해상도 DPI 보정
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            ctx.scale(2, 2);
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#111';
+
+            let drawing = false;
+
+            const startDraw = (e) => {
+                drawing = true;
+                canvases[id].hasSignature = true;
+                const pos = getPos(e, canvas);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y);
+            };
+
+            const draw = (e) => {
+                if (!drawing) return;
+                const pos = getPos(e, canvas);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            };
+
+            const stopDraw = () => {
+                drawing = false;
+            };
+
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', draw);
+            window.addEventListener('mouseup', stopDraw);
+
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e.touches[0]); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); }, { passive: false });
+            window.addEventListener('touchend', stopDraw);
+        }
+
+        function getPos(e, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function clearSig(id) {
+            const { canvas, ctx } = canvases[id];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvases[id].hasSignature = false;
+        }
+
+        // 3. UI 변경 이벤트
+        function handleCatChange() {
+            const cat = document.querySelector('input[name="cat"]:checked').value;
+            const isPeriodNeeded = (cat === '지각' || cat === '조퇴' || cat === '결과');
+            document.getElementById('startPeriodDiv').style.display = isPeriodNeeded ? 'block' : 'none';
+            document.getElementById('endPeriodDiv').style.display = (cat === '결과') ? 'block' : 'none';
+        }
+
+        function handleTypeChange() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            document.getElementById('subTypeDiv').style.display = (type === '출석인정') ? 'block' : 'none';
+        }
+
+        function calcDays() {
+            const s = document.getElementById('startDate').value;
+            const e = document.getElementById('endDate').value;
+            if (!s || !e) return;
+            const d1 = new Date(s);
+            const d2 = new Date(e);
+            if (d2 < d1) {
+                document.getElementById('endDate').value = s;
+                document.getElementById('totalDays').value = '1일간';
+                return;
+            }
+            const diffTime = Math.abs(d2 - d1);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            document.getElementById('totalDays').value = diffDays + '일간';
+        }
+
+        // 4. 폼 제출 처리
+        let submittedRecord = null;
+        async function handleSubmit(e) {
+            e.preventDefault();
+
+            if (!canvases['studentCanvas'].hasSignature) {
+                alert('학생 서명을 입력해 주세요.');
+                return;
+            }
+            if (!canvases['parentCanvas'].hasSignature) {
+                alert('학부모 서명을 입력해 주세요.');
+                return;
+            }
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = '제출 중입니다... 잠시만 기다려주세요.';
+
+            const cat = document.querySelector('input[name="cat"]:checked').value;
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const subTypeEl = document.querySelector('input[name="subType"]:checked');
+            const subType = (type === '출석인정' && subTypeEl) ? subTypeEl.value : '';
+
+            const data = {
+                action: 'submit_absence',
+                grade: document.getElementById('gradeSelect').value,
+                class: document.getElementById('classSelect').value,
+                number: document.getElementById('numberSelect').value,
+                name: document.getElementById('nameInput').value.trim(),
+                cat: cat,
+                type: type,
+                subType: subType,
+                startDate: document.getElementById('startDate').value,
+                startPeriod: document.getElementById('startPeriod').value || '',
+                endDate: document.getElementById('endDate').value,
+                endPeriod: document.getElementById('endPeriod').value || '',
+                totalDays: document.getElementById('totalDays').value,
+                reason: document.getElementById('reasonInput').value.trim(),
+                parentName: document.getElementById('parentName').value.trim(),
+                writeDate: document.getElementById('writeDate').value,
+                studentSigData: canvases['studentCanvas'].canvas.toDataURL('image/png'),
+                parentSigData: canvases['parentCanvas'].canvas.toDataURL('image/png')
+            };
+
+            submittedRecord = data;
+
+            // GAS 웹훅 URL로 POST 전송
+            const targetUrl = DEFAULT_GAS_URL;
+            if (targetUrl) {
+                try {
+                    await fetch(targetUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(data)
+                    });
+                } catch (err) {
+                    console.warn('GAS 백그라운드 저장 전송 중 경고(계속 진행):', err);
+                }
+            }
+
+            btn.disabled = false;
+            btn.innerText = '📄 결석계 제출하기';
+            document.getElementById('successModal').style.display = 'flex';
+        }
+
+        function closeSuccessModal() {
+            document.getElementById('successModal').style.display = 'none';
+            document.getElementById('absenceForm').reset();
+            clearSig('studentCanvas');
+            clearSig('parentCanvas');
+        }
+
+        // 포곡고 공식 '인쇄' 시트 양식 렌더러
+        function renderPogokOfficialSheet(r) {
+            const parseDate = (dStr) => {
+                if (!dStr) return { y: '', m: '', d: '' };
+                const parts = dStr.split('-');
+                if (parts.length >= 3) {
+                    return { y: parts[0], m: String(parseInt(parts[1], 10)), d: String(parseInt(parts[2], 10)) };
+                }
+                return { y: '', m: '', d: '' };
+            };
+
+            const sDate = parseDate(r.startDate);
+            const eDate = parseDate(r.endDate);
+            const wDate = parseDate(r.writeDate || new Date().toISOString().substring(0, 10));
+
+            const isGyeol = r.cat === '결석';
+            const isJi = r.cat === '지각';
+            const isJo = r.cat === '조퇴';
+            const isGwa = r.cat === '결과';
+
+            const isDisease = r.type === '질병';
+            const isPeriod = r.type === '생리통' || (r.subType && r.subType.includes('생리'));
+            const isRecognized = r.type === '출석인정';
+            const isOther = r.type === '기타';
+
+            const sPeriodStr = r.startPeriod ? `${r.startPeriod}교시` : '';
+            const ePeriodStr = r.endPeriod ? `${r.endPeriod}교시` : '';
+
+            let periodFullText = '';
+            if (sDate.y && eDate.y) {
+                if (r.startDate === r.endDate) {
+                    periodFullText = `${sDate.y}년 ${sDate.m}월 ${sDate.d}일 ${sPeriodStr ? sPeriodStr + ' ~ ' : ''}${ePeriodStr ? ePeriodStr : ''} ( ${r.totalDays || '1일간'} )`;
+                } else {
+                    periodFullText = `${sDate.y}년 ${sDate.m}월 ${sDate.d}일 ${sPeriodStr} ~ ${eDate.y}년 ${eDate.m}월 ${eDate.d}일 ${ePeriodStr} ( ${r.totalDays || '1일간'} )`;
+                }
+            } else {
+                periodFullText = `${r.startDate || ''} ~ ${r.endDate || ''} ( ${r.totalDays || '1일간'} )`;
+            }
+
+            return `
+            <div class="absence-sheet-page" style="width: 100%; max-width: 190mm; margin: 0 auto; padding: 8mm 10mm; box-sizing: border-box; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; color: #000; line-height: 1.35; background: #fff;">
+                <!-- 1. 상단 제목 -->
+                <div style="text-align: center; margin-bottom: 12px;">
+                    <h1 style="font-size: 18pt; font-weight: bold; letter-spacing: 2px; margin: 0; display: inline-block; border-bottom: 2px solid #000; padding-bottom: 2px;">
+                        ( ${isGyeol ? '∨ 결석' : '결석'} / ${isJi ? '∨ 지각' : '지각'} / ${isJo ? '∨ 조퇴' : '조퇴'} / ${isGwa ? '∨ 결과' : '결과'} ) 신고서
+                    </h1>
+                </div>
+
+                <!-- 2. 구분 및 인적사항 박스 -->
+                <div style="border: 1.5px solid #000; display: flex; margin-bottom: 10px;">
+                    <div style="flex: 1.3; padding: 6px 10px; border-right: 1.5px solid #000; font-size: 10pt;">
+                        <div style="font-weight: bold; margin-bottom: 4px; font-size: 9.5pt;">해당란에 ∨표시</div>
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <div>${isDisease ? '☑' : '☐'} 질병</div>
+                            <div>${(isRecognized || isPeriod) ? '☑' : '☐'} 출석인정(생리통, 경조사, 전염병 등)</div>
+                            <div>${isOther ? '☑' : '☐'} 기타</div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; padding: 8px 12px; display: flex; flex-direction: column; justify-content: center; font-size: 11pt;">
+                        <div style="margin-bottom: 6px;"><strong>${r.grade || '3'}</strong> 학년 &nbsp; <strong>${r.class || r.ban || ''}</strong> 반 &nbsp; <strong>${r.number || r.num || ''}</strong> 번</div>
+                        <div>성명 : <strong style="font-size: 12pt;">${r.name || ''}</strong></div>
+                    </div>
+                </div>
+
+                <!-- 3. 신고 본문 -->
+                <div style="font-size: 10.5pt; text-align: justify; margin-bottom: 10px; line-height: 1.5;">
+                    본인은 포곡고 학업성적관리규정 24조 및 25조에 의거 &nbsp;
+                    ( ${isGyeol ? '<strong>[∨]결석</strong>' : '[ ]결석'} / ${isJi ? '<strong>[∨]지각</strong>' : '[ ]지각'} / ${isJo ? '<strong>[∨]조퇴</strong>' : '[ ]조퇴'} / ${isGwa ? '<strong>[∨]결과</strong>' : '[ ]결과'} )
+                    하였기에 보호자 연서로 신고합니다.
+                </div>
+
+                <!-- 4. 기간 및 사유 -->
+                <div style="border: 1px solid #000; padding: 8px 12px; margin-bottom: 10px; font-size: 10pt;">
+                    <div style="margin-bottom: 6px; display: flex;">
+                        <span style="font-weight: bold; width: 65px;">1. 기 간 :</span>
+                        <span>${periodFullText}</span>
+                    </div>
+                    <div style="display: flex;">
+                        <span style="font-weight: bold; width: 65px;">2. 사 유 :</span>
+                        <span style="flex: 1; min-height: 28px;">${r.reason || ''} ${r.subType ? '(' + r.subType + ')' : ''}</span>
+                    </div>
+                </div>
+
+                <!-- 5. 신고 일자 및 서명 -->
+                <div style="text-align: center; margin: 10px 0; font-size: 11pt;">
+                    ${wDate.y}년 &nbsp; ${wDate.m}월 &nbsp; ${wDate.d}일
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px; font-size: 10.5pt; padding-right: 15px;">
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                            <span>학 &nbsp; 생 : <strong>${r.name || ''}</strong></span>
+                            <span style="display: inline-block; width: 70px; height: 32px; text-align: center; vertical-align: middle;">
+                                ${r.studentSigData ? `<img src="${r.studentSigData}" style="max-height: 32px; max-width: 65px;">` : '(인)'}
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                            <span>보호자 : <strong>${r.parentName || '학부모'}</strong></span>
+                            <span style="display: inline-block; width: 70px; height: 32px; text-align: center; vertical-align: middle;">
+                                ${r.parentSigData ? `<img src="${r.parentSigData}" style="max-height: 32px; max-width: 65px;">` : '(인)'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; font-size: 14pt; font-weight: bold; letter-spacing: 4px; margin-bottom: 12px;">
+                    포 곡 고 등 학 교 장 &nbsp; 귀 하
+                </div>
+
+                <!-- 절취선 / 구분선 -->
+                <div style="border-top: 1.5px dashed #444; margin: 10px 0 8px 0; position: relative; text-align: center;">
+                    <span style="position: absolute; top: -9px; background: #fff; padding: 0 10px; font-size: 8.5pt; color: #555;">위 신고 내용이 사실과 틀림없음을 확인함.</span>
+                </div>
+
+                <!-- 6. 하단 내용 확인 및 결재 영역 -->
+                <div style="border: 1.5px solid #000; padding: 8px 10px; font-size: 9pt;">
+                    <div style="text-align: center; font-size: 12pt; font-weight: bold; letter-spacing: 6px; margin-bottom: 6px;">
+                        내 &nbsp; 용 &nbsp; 확 &nbsp; 인
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dotted #999; padding-bottom: 4px;">
+                        <div><strong>확 인 일 :</strong> &nbsp; ${wDate.y}년 &nbsp; ${wDate.m}월 &nbsp; ${wDate.d}일</div>
+                        <div>
+                            <strong>확인방법 :</strong> &nbsp;
+                            ☐ 가정방문 &nbsp; ☑ 전화연락 &nbsp; ☐ 학부모내교 &nbsp; ☐ 기타 ( &nbsp; )
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 6px; border-bottom: 1px dotted #999; padding-bottom: 4px;">
+                        <strong>확인내용 :</strong> &nbsp; <span style="color: #444;">학부모 유선 통화 및 학생 건강 상태 확인 완료</span>
+                    </div>
+
+                    <div style="margin-bottom: 6px;">
+                        <div style="font-weight: bold; margin-bottom: 3px;">첨 &nbsp; 부 :</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 8.2pt;" border="1" bordercolor="#ccc">
+                            <tr>
+                                <td style="width: 18%; font-weight: bold; background: #f8f9fa; padding: 3px 5px;">1. 질병</td>
+                                <td style="padding: 3px 5px;">
+                                    ${isDisease ? '☑' : '☐'} 의사진단서, 소견서, 진료확인서, 처방전, 약봉투(병명, 진료 기간 등이 기록된 증빙서류)<br>
+                                    ☐ 담임교사 확인서 &nbsp; | &nbsp; ☐ 학부모 의견서 (※ 2일 이내 질병 근태)
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold; background: #f8f9fa; padding: 3px 5px;">2. 생리통</td>
+                                <td style="padding: 3px 5px;">
+                                    ${isPeriod ? '☑' : '☐'} 의사진단서, 소견서, 진료확인서 (※ 시험 기간 질병 처리 필수 서류임.)
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold; background: #f8f9fa; padding: 3px 5px;">3. 출석인정</td>
+                                <td style="padding: 3px 5px;">
+                                    ${(isRecognized && !isPeriod) ? '☑' : '☐'} 의사진단서, 소견서(질병명 포함) &nbsp; | &nbsp; ☐ 경조사 증빙서류
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold; background: #f8f9fa; padding: 3px 5px;">4. 기타</td>
+                                <td style="padding: 3px 5px;">${isOther ? '☑' : '☐'} 기타 증빙 자료</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px;">
+                        <div style="font-size: 9.5pt;">
+                            <div>위와 같이 확인하였습니다.</div>
+                            <div style="margin-top: 4px;">${wDate.y}년 &nbsp; ${wDate.m}월 &nbsp; ${wDate.d}일</div>
+                            <div style="margin-top: 6px;">담임교사 : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (인)</div>
+                        </div>
+
+                        <!-- 결재 테이블 -->
+                        <table style="border-collapse: collapse; text-align: center; font-size: 8.5pt;" border="1" bordercolor="#000">
+                            <tr>
+                                <th rowspan="2" style="width: 22px; padding: 4px 2px; background: #f1f3f5;">결<br>재</th>
+                                <th style="width: 75px; padding: 3px;">학년부장</th>
+                                <th style="width: 75px; padding: 3px;">교 감</th>
+                            </tr>
+                            <tr>
+                                <td style="height: 40px; vertical-align: bottom; padding-bottom: 2px; font-size: 8pt; color: #555;">(전결)</td>
+                                <td style="height: 40px;"></td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="font-size: 7.5pt; color: #444; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 4px; line-height: 1.25;">
+                        ※ 질병 및 생리통 관련은 학년부장 전결 / 출석인정, 기타 및 정기고사 기간 중 질병, 생리통 관련은 교감 전결<br>
+                        ※ 시험 기간의 경우 질병코드 또는 질병명과 날짜(기간)가 기재된 의사 진단서, 소견서, 진료확인서가 필수임.
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        // 브라우저 직접 A4 정밀 인쇄
+        function triggerClientPrint() {
+            if (!submittedRecord) return;
+            const printDiv = document.getElementById('printSection');
+            printDiv.innerHTML = renderPogokOfficialSheet(submittedRecord);
+            window.print();
+        }
+    </script>
+</body>
+
+</html>

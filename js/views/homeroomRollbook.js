@@ -13,8 +13,9 @@ export const HomeroomRollbookView = {
    * @param {Object} holidaysMap
    * @param {Array} selectedBans e.g. [1, 2, 7]
    * @param {Object} weekInfo e.g. { weekNum, label, days: [...] }
+   * @param {Object} options e.g. { showSpecialStudents: false }
    */
-  render(allStudents, holidaysMap, selectedBans, weekInfo) {
+  render(allStudents, holidaysMap, selectedBans, weekInfo, options = {}) {
     if (!selectedBans || selectedBans.length === 0 || !weekInfo) {
       return `<div class="empty-state">선택된 학급 또는 주차가 없습니다.</div>`;
     }
@@ -26,7 +27,7 @@ export const HomeroomRollbookView = {
       // Sort by student number or studentId
       banStudents.sort((a, b) => a.num - b.num);
 
-      pages.push(this.renderBanPage(banNum, banStudents, weekInfo, holidaysMap));
+      pages.push(this.renderBanPage(banNum, banStudents, weekInfo, holidaysMap, options));
     });
 
     return pages.join('\n');
@@ -35,7 +36,7 @@ export const HomeroomRollbookView = {
   /**
    * Render 1-week page for 1 homeroom class
    */
-  renderBanPage(banNum, students, weekInfo, holidaysMap) {
+  renderBanPage(banNum, students, weekInfo, holidaysMap, options = {}) {
     const days = weekInfo.days; // Mon, Tue, Wed, Thu, Fri
 
     // Day configs: period count per day from AcademicConfig
@@ -73,6 +74,7 @@ export const HomeroomRollbookView = {
     });
 
     // Student rows
+    const showSpecialStudents = !!options.showSpecialStudents;
     const rowsHtml = students.map((st, idx) => {
       const isDarkRow = (st.pRemark.includes('자퇴') || st.pRemark.includes('위탁') || st.pRemark.includes('전출'));
       const darkClass = isDarkRow ? 'row-dark-50' : '';
@@ -82,35 +84,96 @@ export const HomeroomRollbookView = {
         const dayInfo = days[dIdx];
         const isHoliday = !!holidaysMap.fullDayEvents[dayInfo.dateStr];
 
+        const overridesMap = options.overridesMap || null;
+
         spec.periods.forEach((p, pIdx) => {
           let cellText = '';
           let isTint = false;
+          let isOverridden = false;
+          let overrideCat = '';
+          let origStatusText = '';
+          let currentStatusText = '';
+          let rawStatusValue = '';
+          let isDocSubmitted = '';
+
+          const periodKey = p; // '조', 1..7, '종'
+          const overrideKey = `${dayInfo.dateStr}_${periodKey}_${st.studentId}`;
 
           if (isHoliday) {
             cellText = '-';
           } else if (p === '조' || p === '종') {
-            // 조회/종례: show special student marks only, regular students get checkbox
-            const status = this._getSpecialMarkOnly(st, dayInfo.dateStr);
-            cellText = status.text;
-            isTint = status.isShaded && !isDarkRow;
+            const origStatus = RollbookModel.getSpecialMarkOnly(st, dayInfo.dateStr, showSpecialStudents);
+            origStatusText = origStatus.text || '';
+
+            if (overridesMap && overridesMap.has(overrideKey)) {
+              const rec = overridesMap.get(overrideKey);
+              rawStatusValue = (rec.status || '').trim();
+              if (rawStatusValue === '출석') rawStatusValue = '';
+              cellText = RollbookModel.getStatusDisplayText(rawStatusValue);
+              isTint = !!rawStatusValue && !isDarkRow;
+              isOverridden = true;
+              overrideCat = RollbookModel.getCategoryFromRawStatus(rawStatusValue);
+              if (rec.docSubmitted) isDocSubmitted = 'doc-submitted';
+            } else {
+              cellText = origStatus.text;
+              rawStatusValue = cellText;
+              isTint = origStatus.isShaded && !isDarkRow;
+            }
           } else if (spec.day === '수' && (p === 5 || p === 6)) {
-            cellText = '창';
-            isTint = true;
+            origStatusText = '창';
+            if (overridesMap && overridesMap.has(overrideKey)) {
+              const rec = overridesMap.get(overrideKey);
+              rawStatusValue = (rec.status || '').trim();
+              if (rawStatusValue === '출석') rawStatusValue = '';
+              cellText = RollbookModel.getStatusDisplayText(rawStatusValue);
+              isTint = !!rawStatusValue && !isDarkRow;
+              isOverridden = true;
+              overrideCat = RollbookModel.getCategoryFromRawStatus(rawStatusValue);
+              if (rec.docSubmitted) isDocSubmitted = 'doc-submitted';
+            } else {
+              cellText = '창';
+              rawStatusValue = '창';
+              isTint = true;
+            }
           } else {
             const pNum = (typeof p === 'number') ? p : 0;
-            const status = RollbookModel.getStudentPeriodStatus(st, spec.day, pNum, dayInfo.dateStr);
+            const origStatus = RollbookModel.getStudentPeriodStatus(st, spec.day, pNum, dayInfo.dateStr, showSpecialStudents);
+            origStatusText = origStatus.text || '';
+
+            const status = RollbookModel.getEffectiveStudentPeriodStatus(st, spec.day, pNum, dayInfo.dateStr, showSpecialStudents, overridesMap);
             cellText = status.text;
+            rawStatusValue = status.rawStatus || cellText;
             isTint = status.isShaded && !isDarkRow;
+            isOverridden = status.isOverridden;
+            overrideCat = status.category || '';
+            if (status.docSubmitted) isDocSubmitted = 'doc-submitted';
           }
 
           const tintClass = isTint ? 'cell-tint-10' : '';
           const isDayEnd = (pIdx === spec.periods.length - 1);
           const dayEndClass = isDayEnd ? 'col-day-end' : '';
-          cellsHtml += `<td class="period-cell ${tintClass} ${dayEndClass}">${escapeHtml(cellText) || '<span class="check-box-sm"></span>'}</td>`;
+          const overriddenClass = isOverridden ? `cell-overridden status-${overrideCat}` : '';
+
+          cellsHtml += `
+            <td class="period-cell interactive-cell ${tintClass} ${dayEndClass} ${overriddenClass} ${isDocSubmitted}"
+                data-action="attendance-cell"
+                data-student-id="${escapeHtml(st.studentId)}"
+                data-date="${escapeHtml(dayInfo.dateStr)}"
+                data-period="${p}"
+                data-ban="${escapeHtml(st.ban)}"
+                data-num="${escapeHtml(st.num)}"
+                data-name="${escapeHtml(st.name)}"
+                data-room="${st.ban}반"
+                data-original-status="${escapeHtml(origStatusText)}"
+                data-current-status="${escapeHtml(rawStatusValue)}"
+                title="좌클릭: 출결 순환 | Shift+클릭: 역순환 | 우클릭: 직접 선택/전교시 일괄">
+              ${escapeHtml(cellText) || '<span class="check-box-sm"></span>'}
+            </td>`;
         });
       });
 
-      const displayRemark = RollbookModel.getDisplayRemark(st.pRemark, days);
+      const displayRemark = RollbookModel.getEffectiveDisplayRemark(st.pRemark, st.studentId, days, overridesMap, showSpecialStudents, st);
+      const baseRemark = RollbookModel.getDisplayRemark(st.pRemark, days, showSpecialStudents);
 
       return `
         <tr class="homeroom-student-row ${darkClass}">
@@ -118,10 +181,29 @@ export const HomeroomRollbookView = {
           <td class="col-num">${st.num}</td>
           <td class="col-id">${escapeHtml(st.studentId)}</td>
           <td class="col-name">${escapeHtml(st.name)}</td>
-          <td class="col-remark">${escapeHtml(displayRemark)}</td>
+          <td class="col-remark" data-student-id="${escapeHtml(st.studentId)}" data-base-remark="${escapeHtml(baseRemark)}">${escapeHtml(displayRemark)}</td>
           ${cellsHtml}
         </tr>
       `;
+    }).join('');
+
+    const overridesMap = options.overridesMap || null;
+
+    // Daily summary tfoot rows
+    const presenceRowHtml = daySpecs.map((spec, dIdx) => {
+      const stats = this._calcDailyStats(students, spec.day, days[dIdx].dateStr, overridesMap, showSpecialStudents);
+      return `<td colspan="${spec.periods.length}" class="col-day-end stat-presence-cell" data-date="${days[dIdx].dateStr}">
+        <span class="stat-main-num">${stats.present}명</span> <span class="stat-sub">/ ${students.length}명</span>
+      </td>`;
+    }).join('');
+
+    const absenceRowHtml = daySpecs.map((spec, dIdx) => {
+      const stats = this._calcDailyStats(students, spec.day, days[dIdx].dateStr, overridesMap, showSpecialStudents);
+      const text = `결석 ${stats.absence} · 지각 ${stats.late} · 조퇴 ${stats.earlyLeave} · 결과 ${stats.classSkipped}`;
+      const hasAny = (stats.absence + stats.late + stats.earlyLeave + stats.classSkipped) > 0;
+      return `<td colspan="${spec.periods.length}" class="col-day-end stat-absence-cell ${hasAny ? 'has-absence' : ''}" data-date="${days[dIdx].dateStr}">
+        ${text}
+      </td>`;
     }).join('');
 
     return `
@@ -139,7 +221,7 @@ export const HomeroomRollbookView = {
         </div>
 
         <div class="table-wrapper homeroom-table-wrapper">
-          <table class="homeroom-table">
+          <table class="homeroom-table" data-ban="${banNum}">
             <thead>
               <tr>
                 <th rowspan="2" class="col-seq">연번</th>
@@ -156,10 +238,46 @@ export const HomeroomRollbookView = {
             <tbody>
               ${rowsHtml}
             </tbody>
+            <tfoot class="homeroom-stats">
+              <tr class="homeroom-stat-row stat-row-presence">
+                <th colspan="5" class="stat-header">출석 인원</th>
+                ${presenceRowHtml}
+              </tr>
+              <tr class="homeroom-stat-row stat-row-absence">
+                <th colspan="5" class="stat-header">출결 변동 (결·지·퇴·과)</th>
+                ${absenceRowHtml}
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
     `;
+  },
+
+  /**
+   * Calculate daily attendance statistics for a homeroom class on a specific date
+   */
+  _calcDailyStats(students, dayOfWeek, dateStr, overridesMap, showSpecialStudents) {
+    let present = 0;
+    let absence = 0;
+    let late = 0;
+    let earlyLeave = 0;
+    let classSkipped = 0;
+
+    (students || []).forEach(st => {
+      const analysis = RollbookModel.analyzeDailyAttendance(st, dayOfWeek, dateStr, overridesMap, showSpecialStudents);
+      if (analysis.isNormal) {
+        present++;
+      } else {
+        if (analysis.isAbsence) absence++;
+        if (analysis.isLate) late++;
+        if (analysis.isEarlyLeave) earlyLeave++;
+        if (analysis.isClassSkipped) classSkipped++;
+        if (!analysis.isAbsence) present++;
+      }
+    });
+
+    return { present, absence, late, earlyLeave, classSkipped };
   },
 
   /**
@@ -176,13 +294,16 @@ export const HomeroomRollbookView = {
   /**
    * Get only the special mark (특/파/순/자퇴...) for 조/종 columns
    * without checking period-based attendance
+   * @param {Object} student
+   * @param {string} dateStr
+   * @param {boolean} showSpecialStudent
    */
-  _getSpecialMarkOnly(student, dateStr = null) {
+  _getSpecialMarkOnly(student, dateStr = null, showSpecialStudent = false) {
     const pRemark = student.pRemark;
     if (pRemark.includes('자퇴') || pRemark.includes('위탁') || pRemark.includes('전출')) {
       return { text: pRemark, isShaded: true };
     }
-    if (pRemark.includes('특수')) return { text: '특', isShaded: true };
+    if (showSpecialStudent && pRemark.includes('특수')) return { text: '특', isShaded: true };
     if (pRemark.includes('파스') || pRemark.includes('패스')) {
       const isPassActive = !dateStr || (dateStr >= AcademicConfig.passStartDate && dateStr <= AcademicConfig.passEndDate);
       if (isPassActive) {

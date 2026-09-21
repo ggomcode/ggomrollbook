@@ -198,6 +198,52 @@ export const RollbookModel = {
   },
 
   /**
+   * Parse '출결기록' sheet CSV into an override Map
+   * Returns: Map<"YYYY-MM-DD_교시_학번", { key, date, period, ban, num, name, room, status, updatedAt }>
+   */
+  parseAttendanceRecords(csvRows) {
+    const overridesMap = new Map();
+    if (!csvRows || csvRows.length < 2) return overridesMap;
+
+    // Row 0: Headers (고유키, 날짜, 교시, 반, 번호, 이름, 이동반교실, 출결내용, 수정일시)
+    for (let r = 1; r < csvRows.length; r++) {
+      const row = csvRows[r];
+      if (!row || row.length < 3) continue;
+
+      const key = (row[0] || '').trim();
+      const date = (row[1] || '').trim();
+      const period = (row[2] || '').trim();
+      const ban = (row[3] || '').trim();
+      const num = (row[4] || '').trim();
+      const name = (row[5] || '').trim();
+      const room = (row[6] || '').trim();
+      const status = (row[7] || '').trim();
+      const updatedAt = (row[8] || '').trim();
+      const docSubRaw = (row[9] || '').trim();
+      const docSubmitted = docSubRaw === '1' || docSubRaw.toLowerCase() === 'true' || docSubRaw === '제출' || docSubRaw.toUpperCase() === 'Y';
+
+      // If key is present, or construct key: date_period_studentId
+      const finalKey = key || `${date}_${period}_${ban}${num.padStart(2, '0')}`;
+      if (finalKey && status) {
+        overridesMap.set(finalKey, {
+          key: finalKey,
+          date,
+          period: parseInt(period, 10) || period,
+          ban,
+          num,
+          name,
+          room,
+          status,
+          updatedAt,
+          docSubmitted
+        });
+      }
+    }
+
+    return overridesMap;
+  },
+
+  /**
    * Generate Academic Weeks:
    * 2학기 6주차 ~ 21주차 (설정값 기반 자동 생성)
    */
@@ -295,10 +341,406 @@ export const RollbookModel = {
   },
 
   /**
-   * Determine student's attendance cell mark and shading for a specific period:
-   * Returns: { text: '', isShaded: boolean, is50Dark: boolean, isPresent: boolean }
+   * Get display text (1 character) for attendance status in narrow cell
    */
-  getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null) {
+  getStatusDisplayText(status) {
+    const s = (status || '').trim();
+    if (!s || s === '출석') return '';
+    if (s.startsWith('인')) return '인'; // 인정 4종(생리, 체험, 경조사, 전염병) 모두 좁은 칸에는 '인'
+    return s;
+  },
+
+  /**
+   * Get remark keyword for attendance status (to display in 비고란)
+   */
+  getStatusRemarkText(status) {
+    const s = (status || '').trim();
+    if (s === '인(생리)' || s === '생리') return '생리';
+    if (s === '인(체험)' || s === '체험') return '체험';
+    if (s === '인(경조사)' || s === '경조사') return '경조사';
+    if (s === '인(전염병)' || s === '전염병') return '전염병';
+    return '';
+  },
+
+  /**
+   * Get next attendance status in cycle
+   * Standard: '' (출석) -> '미' -> '인(생리)' -> '인(체험)' -> '인(경조사)' -> '인(전염병)' -> '병' -> '기' -> '' (출석)
+   * With original value (e.g. '위탁', '특수', '파', '순'):
+   * original -> '' (출석) -> '미' -> '인(생리)' -> '인(체험)' -> '인(경조사)' -> '인(전염병)' -> '병' -> '기' -> original
+   */
+  getNextAttendanceStatus(currentStatus, originalStatus = '') {
+    const orig = (originalStatus || '').trim();
+    const curr = (currentStatus || '').trim();
+    const baseCycle = ['', '미', '인(생리)', '인(체험)', '인(경조사)', '인(전염병)', '병', '기'];
+    const cycle = (orig && !baseCycle.includes(orig)) ? [orig, ...baseCycle] : baseCycle;
+    const idx = cycle.indexOf(curr);
+    if (idx === -1) return cycle[1] || '';
+    return cycle[(idx + 1) % cycle.length];
+  },
+
+  /**
+   * Get previous attendance status in cycle (Shift + Click)
+   */
+  getPrevAttendanceStatus(currentStatus, originalStatus = '') {
+    const orig = (originalStatus || '').trim();
+    const curr = (currentStatus || '').trim();
+    const baseCycle = ['', '미', '인(생리)', '인(체험)', '인(경조사)', '인(전염병)', '병', '기'];
+    const cycle = (orig && !baseCycle.includes(orig)) ? [orig, ...baseCycle] : baseCycle;
+    const idx = cycle.indexOf(curr);
+    if (idx === -1) return cycle[cycle.length - 1];
+    return cycle[(idx - 1 + cycle.length) % cycle.length];
+  },
+
+  /**
+   * Get category from rawStatus string
+   */
+  getCategoryFromRawStatus(rawStatus) {
+    const s = (rawStatus || '').trim();
+    if (!s || s === '출석') return 'present';
+    if (s === '인(생리)' || s === '생리') return 'saenggyeol';
+    if (s === '인(체험)' || s === '체험') return 'cheheom';
+    if (s === '인(경조사)' || s === '경조사') return 'gyeongjosa';
+    if (s === '인(전염병)' || s === '전염병') return 'jeonyeom';
+    if (s.startsWith('인')) return 'saenggyeol';
+    if (s === '병') return 'jilbyeong';
+    if (s === '미') return 'miinjeong';
+    if (s === '기') return 'gita';
+    return 'gita';
+  },
+
+  /**
+   * Get short reason text from raw status (e.g. '병', '생리', '체험', '경조사', '전염병', '미', '기')
+   */
+  getShortReasonText(rawStatus) {
+    const s = (rawStatus || '').trim();
+    if (!s || s === '출석') return '';
+    if (s === '인(생리)') return '생리';
+    if (s === '인(체험)') return '체험';
+    if (s === '인(경조사)') return '경조사';
+    if (s === '인(전염병)') return '전염병';
+    return s;
+  },
+
+  /**
+   * Get special student / pass / itinerant mark for morning/afternoon sessions ('조', '종')
+   */
+  getSpecialMarkOnly(student, dateStr = null, showSpecialStudent = false) {
+    const pRemark = student ? (student.pRemark || '') : '';
+    if (pRemark.includes('자퇴') || pRemark.includes('위탁') || pRemark.includes('전출')) {
+      return { text: pRemark, isShaded: true };
+    }
+    if (showSpecialStudent && pRemark.includes('특수')) return { text: '특', isShaded: true };
+    if (pRemark.includes('파스') || pRemark.includes('패스')) {
+      const isPassActive = !dateStr || (dateStr >= AcademicConfig.passStartDate && dateStr <= AcademicConfig.passEndDate);
+      if (isPassActive) {
+        return { text: '파', isShaded: true };
+      }
+      return { text: '', isShaded: false };
+    }
+    if (pRemark.includes('순회')) return { text: '순', isShaded: true };
+    return { text: '', isShaded: false };
+  },
+
+  /**
+   * Get effective status taking overridesMap into account
+   */
+  getEffectiveStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null, showSpecialStudent = false, overridesMap = null) {
+    const key = `${dateStr}_${periodNum}_${student.studentId}`;
+    if (overridesMap && overridesMap.has(key)) {
+      const rec = overridesMap.get(key);
+      const rawStatus = (rec.status || '').trim();
+      if (!rawStatus || rawStatus === '출석') {
+        return { text: '', rawStatus: '', remarkText: '', isShaded: false, is50Dark: false, isPresent: true, category: 'present', isOverridden: true };
+      }
+      const displayText = this.getStatusDisplayText(rawStatus);
+      const remarkText = this.getStatusRemarkText(rawStatus);
+      const cat = this.getCategoryFromRawStatus(rawStatus);
+
+      return {
+        text: displayText,
+        rawStatus,
+        remarkText,
+        isShaded: true,
+        is50Dark: false,
+        isPresent: false,
+        category: cat,
+        isOverridden: true,
+        docSubmitted: !!rec.docSubmitted
+      };
+    }
+    const def = this.getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr, showSpecialStudent);
+    return { ...def, rawStatus: def.text, remarkText: '', isOverridden: false, docSubmitted: false };
+  },
+
+  /**
+   * Analyze student daily attendance across whole day:
+   * Sessions: ['조', 1, 2, ..., maxPeriod, '종']
+   * Classifies into:
+   * - 결석: 조례, 1~최종교시, 종례까지 모두 출석이 아닌 경우
+   * - 지각: 앞부분 불참 후 출석
+   * - 조퇴: 출석 후 뒷부분~종례 불참
+   * - 결과: 앞뒤 출석 중 중간 교시 불참
+   */
+  analyzeDailyAttendance(student, dayOfWeek, dateStr, overridesMap = null, showSpecialStudent = false) {
+    const maxPeriod = AcademicConfig.periodsPerDay[dayOfWeek] || 6;
+    const periods = ['조'];
+    for (let p = 1; p <= maxPeriod; p++) periods.push(p);
+    periods.push('종');
+
+    const sessionResults = periods.map(p => {
+      const key = `${dateStr}_${p}_${student.studentId}`;
+      let isPresent = true;
+      let rawStatus = '';
+      let category = 'present';
+
+      if (p === '조' || p === '종') {
+        if (overridesMap && overridesMap.has(key)) {
+          const rec = overridesMap.get(key);
+          rawStatus = (rec.status || '').trim();
+          if (rawStatus && rawStatus !== '출석') {
+            isPresent = false;
+            category = this.getCategoryFromRawStatus(rawStatus);
+          }
+        } else {
+          const sp = this.getSpecialMarkOnly(student, dateStr, showSpecialStudent);
+          if (sp.text && (sp.text.includes('자퇴') || sp.text.includes('위탁') || sp.text.includes('전출'))) {
+            isPresent = false;
+            rawStatus = sp.text;
+            category = 'drop';
+          }
+        }
+      } else {
+        const st = this.getEffectiveStudentPeriodStatus(student, dayOfWeek, p, dateStr, showSpecialStudent, overridesMap);
+        isPresent = st.isPresent;
+        rawStatus = st.rawStatus || st.text;
+        category = st.category || 'present';
+      }
+
+      return { period: p, isPresent, rawStatus, category };
+    });
+
+    const absentSessions = sessionResults.filter(s => !s.isPresent);
+    const totalCount = sessionResults.length;
+
+    // 1. All sessions present
+    if (absentSessions.length === 0) {
+      return {
+        isNormal: true,
+        isAbsence: false,
+        isLate: false,
+        isEarlyLeave: false,
+        isClassSkipped: false,
+        summary: '',
+        sessions: sessionResults
+      };
+    }
+
+    // Helper: find main reason keyword
+    const getMainReason = (list) => {
+      const counts = {};
+      list.forEach(s => {
+        const r = this.getShortReasonText(s.rawStatus) || s.rawStatus || '기';
+        counts[r] = (counts[r] || 0) + 1;
+      });
+      return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || '';
+    };
+
+    // 2. Full Day Absence: ALL sessions (조례, 1~max, 종례) are absent
+    if (absentSessions.length === totalCount) {
+      const mainReason = getMainReason(absentSessions);
+      return {
+        isNormal: false,
+        isAbsence: true,
+        isLate: false,
+        isEarlyLeave: false,
+        isClassSkipped: false,
+        absenceReason: mainReason,
+        summary: `결석(${mainReason})`,
+        sessions: sessionResults
+      };
+    }
+
+    // 3. Partial Attendance: classify into 지각, 조퇴, 결과
+    let firstPresentIdx = -1;
+    let lastPresentIdx = -1;
+
+    for (let i = 0; i < totalCount; i++) {
+      if (sessionResults[i].isPresent) {
+        if (firstPresentIdx === -1) firstPresentIdx = i;
+        lastPresentIdx = i;
+      }
+    }
+
+    // 지각: starting sessions up to first present are absent
+    const isLate = firstPresentIdx > 0;
+    const lateSessions = isLate ? sessionResults.slice(0, firstPresentIdx) : [];
+    const lateReason = isLate ? getMainReason(lateSessions) : '';
+
+    // 조퇴: sessions after last present up to end are absent
+    const isEarlyLeave = lastPresentIdx < totalCount - 1;
+    const earlyLeaveSessions = isEarlyLeave ? sessionResults.slice(lastPresentIdx + 1) : [];
+    const earlyLeaveReason = isEarlyLeave ? getMainReason(earlyLeaveSessions) : '';
+
+    // 결과: middle sessions between first present and last present that are absent
+    const skippedSessions = [];
+    if (firstPresentIdx !== -1 && lastPresentIdx !== -1) {
+      for (let i = firstPresentIdx + 1; i < lastPresentIdx; i++) {
+        if (!sessionResults[i].isPresent) {
+          skippedSessions.push(sessionResults[i]);
+        }
+      }
+    }
+    const isClassSkipped = skippedSessions.length > 0;
+    const skipReason = isClassSkipped ? getMainReason(skippedSessions) : '';
+    const skipPeriods = skippedSessions.map(s => s.period).join(',');
+
+    // Formulate concise summary text
+    const parts = [];
+    if (isLate) parts.push(`지각(${lateReason})`);
+    if (isEarlyLeave) parts.push(`조퇴(${earlyLeaveReason})`);
+    if (isClassSkipped) parts.push(`결과(${skipReason} ${skipPeriods}T)`);
+
+    return {
+      isNormal: false,
+      isAbsence: false,
+      isLate,
+      isEarlyLeave,
+      isClassSkipped,
+      lateReason,
+      earlyLeaveReason,
+      skipReason,
+      summary: parts.join('·'),
+      sessions: sessionResults
+    };
+  },
+
+  getShortReasonText(rawStatus) {
+    if (!rawStatus) return '';
+    const s = String(rawStatus).trim();
+    if (s.includes('체험')) return '체험';
+    if (s.includes('경조사')) return '경조사';
+    if (s.includes('전염병')) return '전염병';
+    if (s.includes('생리')) return '생리';
+    if (s.includes('병')) return '병';
+    if (s.includes('기')) return '기';
+    if (s.includes('인')) return '인';
+    return s;
+  },
+
+  /**
+   * Convert daily attendance analysis into an official Absence Report record object
+   */
+  createAbsenceReportFromRollbook(student, dayOfWeek, dateStr, overridesMap = null) {
+    const analysis = this.analyzeDailyAttendance(student, dayOfWeek, dateStr, overridesMap);
+    if (analysis.isNormal) {
+      return null;
+    }
+
+    let cat = '결석';
+    let rawReason = '';
+    let startPeriod = '';
+    let endPeriod = '';
+
+    if (analysis.isAbsence) {
+      cat = '결석';
+      rawReason = analysis.absenceReason;
+      startPeriod = 1;
+      const numPeriods = analysis.sessions.filter(s => typeof s.period === 'number');
+      endPeriod = numPeriods.length > 0 ? numPeriods[numPeriods.length - 1].period : '';
+    } else if (analysis.isLate) {
+      cat = '지각';
+      rawReason = analysis.lateReason;
+      const lateSessions = analysis.sessions.filter(s => !s.isPresent && typeof s.period === 'number');
+      if (lateSessions.length > 0) {
+        startPeriod = lateSessions[0].period;
+        endPeriod = lateSessions[lateSessions.length - 1].period;
+      }
+    } else if (analysis.isEarlyLeave) {
+      cat = '조퇴';
+      rawReason = analysis.earlyLeaveReason;
+      const earlySessions = analysis.sessions.filter(s => !s.isPresent && typeof s.period === 'number');
+      if (earlySessions.length > 0) {
+        startPeriod = earlySessions[0].period;
+        endPeriod = earlySessions[earlySessions.length - 1].period;
+      }
+    } else if (analysis.isClassSkipped) {
+      cat = '결과';
+      rawReason = analysis.skipReason;
+      const skipSessions = analysis.sessions.filter(s => !s.isPresent && typeof s.period === 'number');
+      if (skipSessions.length > 0) {
+        startPeriod = skipSessions[0].period;
+        endPeriod = skipSessions[skipSessions.length - 1].period;
+      }
+    }
+
+    // Type & subType mapping
+    let type = '질병';
+    let subType = '';
+    let reasonText = '';
+
+    const r = (rawReason || '').trim();
+    if (r === '병' || r.includes('질병') || r.includes('감기') || r.includes('병원')) {
+      type = '질병';
+      reasonText = '질병으로 인한 근태 (치료 및 안정)';
+    } else if (r.includes('생리')) {
+      type = '생리통';
+      subType = '생리통';
+      reasonText = '생리통으로 인한 안정';
+    } else if (r.includes('체험')) {
+      type = '출석인정';
+      subType = '교외체험학습';
+      reasonText = '학교장 허가 교외체험학습 참여';
+    } else if (r.includes('경조사')) {
+      type = '출석인정';
+      subType = '경조사';
+      reasonText = '가족 경조사 참석';
+    } else if (r.includes('전염병') || r.includes('격리') || r.includes('코로나') || r.includes('독감')) {
+      type = '출석인정';
+      subType = '전염병';
+      reasonText = '법정 전염병 격리 치료';
+    } else if (r.startsWith('인')) {
+      type = '출석인정';
+      subType = '출석인정';
+      reasonText = '출석인정 사유 발생';
+    } else if (r === '기' || r.includes('기타')) {
+      type = '기타';
+      reasonText = '개인 사정으로 인한 사유';
+    } else {
+      type = '질병';
+      reasonText = r || '건강상의 사유로 인한 근태';
+    }
+
+    return {
+      grade: '3',
+      ban: student.ban,
+      num: student.num,
+      name: student.name,
+      studentId: student.studentId,
+      cat,
+      type,
+      subType,
+      startDate: dateStr,
+      endDate: dateStr,
+      startPeriod,
+      endPeriod,
+      totalDays: '1일간',
+      reason: reasonText,
+      parentName: '학부모',
+      writeDate: dateStr,
+      studentSigUrl: '',
+      parentSigUrl: '',
+      printedAt: ''
+    };
+  },
+
+  /**
+   * @param {Object} student
+   * @param {string} dayOfWeek '월' | '화' | '수' | '목' | '금'
+   * @param {number} periodNum 1 to 7
+   * @param {string} dateStr 'YYYY-MM-DD'
+   * @param {boolean} showSpecialStudent Whether to show special student marks
+   */
+  getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null, showSpecialStudent = false) {
     const pRemark = student.pRemark;
 
     // 1. 자퇴 / 위탁 / 전출 -> 50% dark shading for entire row, not present
@@ -306,8 +748,8 @@ export const RollbookModel = {
       return { text: pRemark, isShaded: true, is50Dark: true, isPresent: false, category: 'drop' };
     }
 
-    // 2. 특수 -> '특' (10% tint)
-    if (pRemark.includes('특수')) {
+    // 2. 특수 -> '특' (10% tint) (showSpecialStudent가 true일 때만 '특'으로 표시)
+    if (showSpecialStudent && pRemark.includes('특수')) {
       return { text: '특', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
     }
 
@@ -377,12 +819,24 @@ export const RollbookModel = {
 
   /**
    * Filter remark text based on operational date (e.g. hide '파스' outside PASS operating period)
+   * and special student display toggle
    * @param {string} pRemark
    * @param {string|Object|Array} dateOrDays - 'YYYY-MM-DD', dayInfo object, or array of days
+   * @param {boolean} showSpecialStudent - Whether to display '특수' mark in remarks
    */
-  getDisplayRemark(pRemark, dateOrDays) {
+  getDisplayRemark(pRemark, dateOrDays, showSpecialStudent = false) {
     if (!pRemark) return '';
-    if (!dateOrDays) return pRemark;
+    let result = pRemark;
+
+    // 특수학생 표시 토글이 OFF(false)인 경우 '특수' 문구 제거
+    if (!showSpecialStudent && result.includes('특수')) {
+      result = result
+        .replace(/특수/g, '')
+        .replace(/^[,\s/]+|[,\s/]+$/g, '')
+        .trim();
+    }
+
+    if (!dateOrDays) return result;
     let isPassActive = false;
     if (Array.isArray(dateOrDays)) {
       isPassActive = dateOrDays.some(d => {
@@ -393,13 +847,72 @@ export const RollbookModel = {
       const dStr = typeof dateOrDays === 'string' ? dateOrDays : (dateOrDays && dateOrDays.dateStr);
       isPassActive = dStr && dStr >= AcademicConfig.passStartDate && dStr <= AcademicConfig.passEndDate;
     }
-    if (!isPassActive && (pRemark.includes('파스') || pRemark.includes('패스'))) {
-      return pRemark
+    if (!isPassActive && (result.includes('파스') || result.includes('패스'))) {
+      result = result
         .replace(/파스|패스/g, '')
         .replace(/^[,\s/]+|[,\s/]+$/g, '')
         .trim();
     }
-    return pRemark;
+    return result;
+  },
+
+  /**
+   * Get effective display remark combining base remark and attendance override remarks/daily summaries
+   */
+  getEffectiveDisplayRemark(pRemark, studentId, dateOrDays, overridesMap = null, showSpecialStudent = false, student = null) {
+    const base = this.getDisplayRemark(pRemark, dateOrDays, showSpecialStudent);
+    if (!overridesMap || !studentId || !dateOrDays) return base;
+
+    const dayList = Array.isArray(dateOrDays)
+      ? dateOrDays
+      : [dateOrDays];
+
+    const dailySummaries = [];
+    const extraRemarks = new Set();
+
+    dayList.forEach(dayItem => {
+      const dStr = typeof dayItem === 'string' ? dayItem : (dayItem && dayItem.dateStr);
+      const dayOfWeek = (dayItem && dayItem.dayOfWeek) || (dStr ? AcademicConfig.getDayOfWeek(dStr) : '');
+      if (!dStr) return;
+
+      if (student && dayOfWeek) {
+        const analysis = this.analyzeDailyAttendance(student, dayOfWeek, dStr, overridesMap, showSpecialStudent);
+        if (!analysis.isNormal && analysis.summary) {
+          const prefix = dayList.length > 1 ? `${dayOfWeek}:` : '';
+          dailySummaries.push(`${prefix}${analysis.summary}`);
+          return;
+        }
+      }
+
+      // Fallback: check session-level overrides for remark text ('생리', '체험', '경조사', '전염병')
+      const checkPeriods = ['조', 1, 2, 3, 4, 5, 6, 7, '종'];
+      checkPeriods.forEach(p => {
+        const key = `${dStr}_${p}_${studentId}`;
+        if (overridesMap.has(key)) {
+          const rec = overridesMap.get(key);
+          const rText = this.getStatusRemarkText(rec.status);
+          if (rText) extraRemarks.add(rText);
+        }
+      });
+    });
+
+    const combinedExtra = [];
+    if (dailySummaries.length > 0) {
+      combinedExtra.push(...dailySummaries);
+    } else if (extraRemarks.size > 0) {
+      combinedExtra.push(Array.from(extraRemarks).join(', '));
+    }
+
+    if (combinedExtra.length > 0) {
+      const extraStr = combinedExtra.join(', ');
+      if (base) {
+        if (base.includes(extraStr)) return base;
+        return `${base}, ${extraStr}`;
+      }
+      return extraStr;
+    }
+
+    return base;
   },
 
   /**
@@ -428,7 +941,7 @@ export const RollbookModel = {
    * Resolve period details for a classroom on a specific date:
    * Returns { subj, teacher, room, status: 'normal'|'cancelled'|'swap'|'activity'|'holiday', activityTitle, students }
    */
-  getRoomPeriodRoster(allStudents, roomName, dateStr, dayOfWeek, periodNum, holidaysMap) {
+  getRoomPeriodRoster(allStudents, roomName, dateStr, dayOfWeek, periodNum, holidaysMap, overridesMap = null) {
     const fullDayEvent = holidaysMap.fullDayEvents[dateStr];
     if (fullDayEvent) {
       return {
@@ -493,15 +1006,17 @@ export const RollbookModel = {
     // Calculate expected attendance and absence categories for this period
     let expectedAttendance = 0;
     const stats = {
-      saenggyeol: 0, // 출석인정(생결)
-      cheheom: 0,    // 출석인정(체험)
+      saenggyeol: 0, // 인정(생리)
+      cheheom: 0,    // 인정(체험)
+      gyeongjosa: 0, // 인정(경조사)
+      jeonyeom: 0,   // 인정(전염병)
       jilbyeong: 0,  // 질병
       gita: 0,       // 기타
       miinjeong: 0   // 미인정
     };
 
     assignedStudents.forEach(st => {
-      const status = this.getStudentPeriodStatus(st, dayOfWeek, periodNum, dateStr);
+      const status = this.getEffectiveStudentPeriodStatus(st, dayOfWeek, periodNum, dateStr, false, overridesMap);
       if (status.isPresent) {
         expectedAttendance++;
       } else if (status.category && stats[status.category] !== undefined) {
@@ -521,6 +1036,108 @@ export const RollbookModel = {
       expectedAttendance,
       stats,
       totalAssigned: assignedStudents.length
+    };
+  },
+
+  /**
+   * Calculate NEIS Monthly Attendance Summary for a homeroom class
+   * Used by 담임교사 to close monthly attendance in NEIS without manual counting
+   */
+  calculateNeisMonthlySummary(allStudents, banNum, year, month, overridesMap = null, showSpecialStudents = false) {
+    const banStudents = (allStudents || []).filter(s => s.ban === banNum);
+    banStudents.sort((a, b) => a.num - b.num);
+
+    // Generate all dates in the selected month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dates = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayStr = String(d).padStart(2, '0');
+      const mStr = String(month).padStart(2, '0');
+      const dateStr = `${year}-${mStr}-${dayStr}`;
+      const dayOfWeek = AcademicConfig.getDayOfWeek(dateStr);
+      if (dayOfWeek !== '토' && dayOfWeek !== '일') {
+        dates.push({ dateStr, dayOfWeek, d });
+      }
+    }
+
+    const classifyReason = (reason) => {
+      const r = (reason || '').trim();
+      if (r === '병' || r.includes('질병')) return 'ill';
+      if (r === '미' || r.includes('미인정') || r.includes('무단')) return 'unrec';
+      if (r.startsWith('인') || r === '생리' || r === '체험' || r === '경조사' || r === '전염병' || r.includes('인정')) return 'rec';
+      return 'etc';
+    };
+
+    const studentsSummary = banStudents.map(st => {
+      const summary = {
+        num: st.num,
+        studentId: st.studentId,
+        name: st.name,
+        absence: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+        late: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+        earlyLeave: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+        classSkipped: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+        details: []
+      };
+
+      dates.forEach(dInfo => {
+        const analysis = this.analyzeDailyAttendance(st, dInfo.dayOfWeek, dInfo.dateStr, overridesMap, showSpecialStudents);
+        if (analysis.isNormal) return;
+
+        if (analysis.isAbsence) {
+          const type = classifyReason(analysis.absenceReason);
+          summary.absence[type]++;
+          summary.absence.total++;
+          summary.details.push(`${dInfo.d}일:결석(${analysis.absenceReason})`);
+        } else {
+          if (analysis.isLate) {
+            const type = classifyReason(analysis.lateReason);
+            summary.late[type]++;
+            summary.late.total++;
+            summary.details.push(`${dInfo.d}일:지각(${analysis.lateReason})`);
+          }
+          if (analysis.isEarlyLeave) {
+            const type = classifyReason(analysis.earlyLeaveReason);
+            summary.earlyLeave[type]++;
+            summary.earlyLeave.total++;
+            summary.details.push(`${dInfo.d}일:조퇴(${analysis.earlyLeaveReason})`);
+          }
+          if (analysis.isClassSkipped) {
+            const type = classifyReason(analysis.skipReason);
+            summary.classSkipped[type]++;
+            summary.classSkipped.total++;
+            summary.details.push(`${dInfo.d}일:결과(${analysis.skipReason})`);
+          }
+        }
+      });
+
+      return summary;
+    });
+
+    // Calculate class totals
+    const totals = {
+      absence: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+      late: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+      earlyLeave: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 },
+      classSkipped: { ill: 0, unrec: 0, rec: 0, etc: 0, total: 0 }
+    };
+
+    studentsSummary.forEach(s => {
+      ['absence', 'late', 'earlyLeave', 'classSkipped'].forEach(cat => {
+        ['ill', 'unrec', 'rec', 'etc', 'total'].forEach(sub => {
+          totals[cat][sub] += s[cat][sub];
+        });
+      });
+    });
+
+    return {
+      banNum,
+      year,
+      month,
+      datesCount: dates.length,
+      studentCount: banStudents.length,
+      studentsData: studentsSummary,
+      totals
     };
   }
 };
