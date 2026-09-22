@@ -1184,6 +1184,9 @@ class App {
     const cancelBtn = document.getElementById('cancelAqeModalBtn');
     if (closeBtn) closeBtn.onclick = closeModal;
     if (cancelBtn) cancelBtn.onclick = closeModal;
+    modal.onclick = (e) => {
+      if (e.target === modal) closeModal();
+    };
 
     if (printBtn) {
       printBtn.onclick = () => {
