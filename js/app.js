@@ -1035,7 +1035,12 @@ class App {
     const dObj = new Date(date);
     const dayOfWeek = isNaN(dObj.getDay()) ? '월' : dayNames[dObj.getDay()];
 
-    const autoReport = RollbookModel.createAbsenceReportFromRollbook(
+    const autoReport = RollbookModel.findContiguousAbsenceRange(
+      student,
+      date,
+      this.state.attendanceOverrides,
+      this.state.holidaysMap
+    ) || RollbookModel.createAbsenceReportFromRollbook(
       student,
       dayOfWeek,
       date,
@@ -1060,20 +1065,95 @@ class App {
       parentName: '학부모'
     };
 
+    const streakNoticeEl = document.getElementById('aqeStreakNotice');
+    const printModeWrapEl = document.getElementById('aqePrintModeWrap');
+    const modeCombinedEl = document.getElementById('aqeModeCombined');
+    const modeIndividualEl = document.getElementById('aqeModeIndividual');
+    const modeCombinedLabel = document.getElementById('aqeModeCombinedLabel');
+    const modeIndividualLabel = document.getElementById('aqeModeIndividualLabel');
+    const modeCombinedDesc = document.getElementById('aqeModeCombinedDesc');
+    const modeIndividualDesc = document.getElementById('aqeModeIndividualDesc');
+
     const studentInfoEl = document.getElementById('aqeStudentInfo');
     const catEl = document.getElementById('aqeCat');
     const typeEl = document.getElementById('aqeType');
     const subTypeEl = document.getElementById('aqeSubType');
     const startDateEl = document.getElementById('aqeStartDate');
+    const endDateEl = document.getElementById('aqeEndDate');
+    const totalDaysEl = document.getElementById('aqeTotalDays');
     const periodsEl = document.getElementById('aqePeriods');
     const reasonEl = document.getElementById('aqeReason');
     const parentNameEl = document.getElementById('aqeParentName');
+    const printBtn = document.getElementById('printAqeBtn');
 
     if (studentInfoEl) studentInfoEl.value = `3학년 ${report.ban}반 ${report.num}번 ${report.name}`;
     if (catEl) catEl.value = report.cat;
     if (typeEl) typeEl.value = report.type;
     if (subTypeEl) subTypeEl.value = report.subType || '';
-    if (startDateEl) startDateEl.value = report.startDate || date;
+    if (startDateEl) {
+      startDateEl.value = report.startDate || date;
+      startDateEl.disabled = false;
+    }
+    if (endDateEl) {
+      endDateEl.value = report.endDate || report.startDate || date;
+      endDateEl.disabled = false;
+    }
+    if (totalDaysEl) {
+      totalDaysEl.value = report.totalDays || '1일간';
+      totalDaysEl.disabled = false;
+    }
+
+    const hasStreak = report.schoolDaysCount && report.schoolDaysCount > 1;
+
+    const updateModeUI = () => {
+      const isIndividual = modeIndividualEl && modeIndividualEl.checked;
+      if (modeCombinedLabel) modeCombinedLabel.style.background = !isIndividual ? '#eff6ff' : 'transparent';
+      if (modeIndividualLabel) modeIndividualLabel.style.background = isIndividual ? '#eff6ff' : 'transparent';
+
+      if (isIndividual) {
+        if (startDateEl) { startDateEl.value = `${report.schoolDays[0]} 외`; startDateEl.disabled = true; }
+        if (endDateEl) { endDateEl.value = `${report.schoolDays[report.schoolDays.length - 1]}`; endDateEl.disabled = true; }
+        if (totalDaysEl) { totalDaysEl.value = `각 1일간 (총 ${report.schoolDaysCount}장)`; totalDaysEl.disabled = true; }
+        if (printBtn) printBtn.innerHTML = `🖨️ 결석계 총 ${report.schoolDaysCount}장 분할 인쇄`;
+      } else {
+        if (startDateEl) { startDateEl.value = report.startDate || date; startDateEl.disabled = false; }
+        if (endDateEl) { endDateEl.value = report.endDate || report.startDate || date; endDateEl.disabled = false; }
+        if (totalDaysEl) { totalDaysEl.value = report.totalDays || '1일간'; totalDaysEl.disabled = false; }
+        if (printBtn) {
+          printBtn.innerHTML = hasStreak
+            ? `🖨️ 결석계 1장 통합 인쇄 (${report.totalDays || report.schoolDaysCount + '일간'})`
+            : `🖨️ 결석계 인쇄`;
+        }
+      }
+    };
+
+    if (hasStreak) {
+      if (streakNoticeEl) {
+        streakNoticeEl.style.display = 'block';
+        streakNoticeEl.innerHTML = `✨ <strong>연속 출결 감지:</strong> 주말 및 공휴일을 제외한 동일 사유 연속 출결(총 <strong>${report.schoolDaysCount}일간</strong>)이 감지되었습니다. 1장으로 통합 인쇄할지 여러 장으로 나눠서 인쇄할지 아래에서 선택해주세요.`;
+      }
+      if (printModeWrapEl) printModeWrapEl.style.display = 'block';
+      if (modeCombinedEl) modeCombinedEl.checked = true;
+      if (modeCombinedDesc) {
+        modeCombinedDesc.textContent = `${report.startDate} ~ ${report.endDate} (${report.totalDays}) → 1장으로 묶어서 출력`;
+      }
+      if (modeIndividualDesc) {
+        const daysPreview = (report.schoolDays && report.schoolDays.length <= 4)
+          ? report.schoolDays.join(', ')
+          : `${report.schoolDays[0]} ~ ${report.schoolDays[report.schoolDays.length - 1]} (${report.schoolDaysCount}일)`;
+        modeIndividualDesc.textContent = `${daysPreview} → 날짜별로 1장씩 총 ${report.schoolDaysCount}장 분할 출력`;
+      }
+
+      if (modeCombinedEl) modeCombinedEl.onchange = updateModeUI;
+      if (modeIndividualEl) modeIndividualEl.onchange = updateModeUI;
+      updateModeUI();
+    } else {
+      if (streakNoticeEl) streakNoticeEl.style.display = 'none';
+      if (printModeWrapEl) printModeWrapEl.style.display = 'none';
+      if (modeCombinedEl) modeCombinedEl.checked = true;
+      if (printBtn) printBtn.innerHTML = '🖨️ 결석계 인쇄';
+    }
+
     if (periodsEl) {
       periodsEl.value = (report.startPeriod && report.endPeriod)
         ? `${report.startPeriod}교시 ~ ${report.endPeriod}교시`
@@ -1094,13 +1174,17 @@ class App {
       typeEl.onchange = syncSubTypeWrap;
     }
 
-    const closeModal = () => { modal.style.display = 'none'; };
+    const closeModal = () => {
+      if (startDateEl) startDateEl.disabled = false;
+      if (endDateEl) endDateEl.disabled = false;
+      if (totalDaysEl) totalDaysEl.disabled = false;
+      modal.style.display = 'none';
+    };
     const closeBtn = document.getElementById('closeAqeModalBtn');
     const cancelBtn = document.getElementById('cancelAqeModalBtn');
     if (closeBtn) closeBtn.onclick = closeModal;
     if (cancelBtn) cancelBtn.onclick = closeModal;
 
-    const printBtn = document.getElementById('printAqeBtn');
     if (printBtn) {
       printBtn.onclick = () => {
         let sp = '';
@@ -1114,28 +1198,60 @@ class App {
           }
         }
 
-        const finalRecord = {
-          grade: '3',
-          ban: report.ban,
-          num: report.num,
-          name: report.name,
-          cat: catEl ? catEl.value : report.cat,
-          type: typeEl ? typeEl.value : report.type,
-          subType: subTypeEl ? subTypeEl.value.trim() : '',
-          startDate: startDateEl ? startDateEl.value : date,
-          endDate: startDateEl ? startDateEl.value : date,
-          startPeriod: sp,
-          endPeriod: ep,
-          totalDays: '1일간',
-          reason: reasonEl ? reasonEl.value.trim() : '',
-          parentName: parentNameEl ? (parentNameEl.value.trim() || '학부모') : '학부모',
-          writeDate: startDateEl ? startDateEl.value : date,
-          studentSigUrl: '',
-          parentSigUrl: ''
-        };
+        const isIndividual = hasStreak && modeIndividualEl && modeIndividualEl.checked;
 
-        closeModal();
-        this.printAbsenceRecords([finalRecord]);
+        if (isIndividual) {
+          // 날짜별로 1장씩 분할 인쇄
+          const records = (report.schoolDays || [date]).map(dStr => ({
+            grade: '3',
+            ban: report.ban,
+            num: report.num,
+            name: report.name,
+            cat: catEl ? catEl.value : report.cat,
+            type: typeEl ? typeEl.value : report.type,
+            subType: subTypeEl ? subTypeEl.value.trim() : '',
+            startDate: dStr,
+            endDate: dStr,
+            startPeriod: sp,
+            endPeriod: ep,
+            totalDays: '1일간',
+            reason: reasonEl ? reasonEl.value.trim() : '',
+            parentName: parentNameEl ? (parentNameEl.value.trim() || '학부모') : '학부모',
+            writeDate: dStr,
+            studentSigUrl: '',
+            parentSigUrl: ''
+          }));
+
+          closeModal();
+          this.printAbsenceRecords(records);
+        } else {
+          // 1장으로 통합 인쇄
+          const sDateVal = (startDateEl && !startDateEl.disabled) ? startDateEl.value : (report.startDate || date);
+          const eDateVal = (endDateEl && !endDateEl.disabled) ? endDateEl.value : (report.endDate || sDateVal);
+
+          const finalRecord = {
+            grade: '3',
+            ban: report.ban,
+            num: report.num,
+            name: report.name,
+            cat: catEl ? catEl.value : report.cat,
+            type: typeEl ? typeEl.value : report.type,
+            subType: subTypeEl ? subTypeEl.value.trim() : '',
+            startDate: sDateVal,
+            endDate: eDateVal,
+            startPeriod: sp,
+            endPeriod: ep,
+            totalDays: (totalDaysEl && !totalDaysEl.disabled) ? totalDaysEl.value.trim() : (report.totalDays || '1일간'),
+            reason: reasonEl ? reasonEl.value.trim() : '',
+            parentName: parentNameEl ? (parentNameEl.value.trim() || '학부모') : '학부모',
+            writeDate: eDateVal || sDateVal || date,
+            studentSigUrl: '',
+            parentSigUrl: ''
+          };
+
+          closeModal();
+          this.printAbsenceRecords([finalRecord]);
+        }
       };
     }
 
@@ -2291,9 +2407,13 @@ class App {
       let periodFullText = '';
       if (sDate.y && eDate.y) {
         if (r.startDate === r.endDate) {
-          periodFullText = `${sDate.y}년 ${sDate.m}월 ${sDate.d}일 ${sPeriodStr ? sPeriodStr + ' ~ ' : ''}${ePeriodStr ? ePeriodStr : ''} ( ${r.totalDays || '1일간'} )`;
+          const pStr = (sPeriodStr && ePeriodStr)
+            ? `${sPeriodStr} ~ ${ePeriodStr}`
+            : (sPeriodStr || ePeriodStr || '');
+          periodFullText = `${sDate.y}년 ${sDate.m}월 ${sDate.d}일 ${pStr ? pStr + ' ' : ''}( ${r.totalDays || '1일간'} )`;
         } else {
-          periodFullText = `${sDate.y}년 ${sDate.m}월 ${sDate.d}일 ${sPeriodStr} ~ ${eDate.y}년 ${eDate.m}월 ${eDate.d}일 ${ePeriodStr} ( ${r.totalDays || '1일간'} )`;
+          const pStr = (r.cat !== '결석' && sPeriodStr && ePeriodStr) ? ` ${sPeriodStr} ~ ${ePeriodStr}` : '';
+          periodFullText = `${sDate.y}년 ${sDate.m}월 ${sDate.d}일 ~ ${eDate.y}년 ${eDate.m}월 ${eDate.d}일${pStr} ( ${r.totalDays || '1일간'} )`;
         }
       } else {
         periodFullText = `${r.startDate || ''} ~ ${r.endDate || ''} ( ${r.totalDays || '1일간'} )`;

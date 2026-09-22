@@ -101,26 +101,29 @@ export const HomeroomRollbookView = {
           if (isHoliday) {
             cellText = '-';
           } else if (p === '조' || p === '종') {
-            const origStatus = RollbookModel.getSpecialMarkOnly(st, dayInfo.dateStr, showSpecialStudents);
+            const origStatus = RollbookModel.getStudentPeriodStatus(st, spec.day, p, dayInfo.dateStr, showSpecialStudents);
             origStatusText = origStatus.text || '';
 
-            if (overridesMap && overridesMap.has(overrideKey)) {
-              const rec = overridesMap.get(overrideKey);
-              rawStatusValue = (rec.status || '').trim();
-              if (rawStatusValue === '출석') rawStatusValue = '';
-              cellText = RollbookModel.getStatusDisplayText(rawStatusValue);
-              isTint = !!rawStatusValue && !isDarkRow;
-              isOverridden = true;
-              overrideCat = RollbookModel.getCategoryFromRawStatus(rawStatusValue);
-              if (rec.docSubmitted) isDocSubmitted = 'doc-submitted';
-            } else {
-              cellText = origStatus.text;
-              rawStatusValue = cellText;
-              isTint = origStatus.isShaded && !isDarkRow;
-            }
+            const status = RollbookModel.getEffectiveStudentPeriodStatus(st, spec.day, p, dayInfo.dateStr, showSpecialStudents, overridesMap);
+            cellText = status.text;
+            rawStatusValue = status.rawStatus || cellText;
+            isTint = status.isShaded && !isDarkRow;
+            isOverridden = status.isOverridden;
+            overrideCat = status.category || '';
+            if (status.docSubmitted) isDocSubmitted = 'doc-submitted';
           } else if (spec.day === '수' && (p === 5 || p === 6)) {
-            origStatusText = '창';
-            if (overridesMap && overridesMap.has(overrideKey)) {
+            const origStatus = RollbookModel.getStudentPeriodStatus(st, spec.day, p, dayInfo.dateStr, showSpecialStudents);
+            const status = RollbookModel.getEffectiveStudentPeriodStatus(st, spec.day, p, dayInfo.dateStr, showSpecialStudents, overridesMap);
+
+            if (origStatus.is50Dark || !origStatus.isPresent) {
+              origStatusText = origStatus.text || '';
+              cellText = status.text;
+              rawStatusValue = status.rawStatus || cellText;
+              isTint = status.isShaded && !isDarkRow;
+              isOverridden = status.isOverridden;
+              overrideCat = status.category || '';
+              if (status.docSubmitted) isDocSubmitted = 'doc-submitted';
+            } else if (overridesMap && overridesMap.has(overrideKey)) {
               const rec = overridesMap.get(overrideKey);
               rawStatusValue = (rec.status || '').trim();
               if (rawStatusValue === '출석') rawStatusValue = '';
@@ -130,6 +133,7 @@ export const HomeroomRollbookView = {
               overrideCat = RollbookModel.getCategoryFromRawStatus(rawStatusValue);
               if (rec.docSubmitted) isDocSubmitted = 'doc-submitted';
             } else {
+              origStatusText = '창';
               cellText = '창';
               rawStatusValue = '창';
               isTint = true;

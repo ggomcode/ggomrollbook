@@ -355,10 +355,10 @@ export const RollbookModel = {
    */
   getStatusRemarkText(status) {
     const s = (status || '').trim();
-    if (s === '인(생리)' || s === '생리') return '생리';
-    if (s === '인(체험)' || s === '체험') return '체험';
-    if (s === '인(경조사)' || s === '경조사') return '경조사';
-    if (s === '인(전염병)' || s === '전염병') return '전염병';
+    if (s === '인(생리)' || s === '생리' || s === '생결' || s === '생') return '생리';
+    if (s === '인(체험)' || s === '체험' || s === '체') return '체험';
+    if (s === '인(경조사)' || s === '경조사' || s === '경') return '경조사';
+    if (s === '인(전염병)' || s === '전염병' || s === '전') return '전염병';
     return '';
   },
 
@@ -476,8 +476,8 @@ export const RollbookModel = {
    */
   getEffectiveStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null, showSpecialStudent = false, overridesMap = null) {
     const def = this.getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr, showSpecialStudent);
-    const key = `${dateStr}_${periodNum}_${student.studentId}`;
-    if (overridesMap && overridesMap.has(key)) {
+    const key = `${dateStr}_${periodNum}_${student?.studentId || ''}`;
+    if (overridesMap && student && overridesMap.has(key)) {
       const rec = overridesMap.get(key);
       const rawStatus = (rec.status || '').trim();
 
@@ -524,35 +524,13 @@ export const RollbookModel = {
     periods.push('종');
 
     const sessionResults = periods.map(p => {
-      const key = `${dateStr}_${p}_${student.studentId}`;
-      let isPresent = true;
-      let rawStatus = '';
-      let category = 'present';
-
-      if (p === '조' || p === '종') {
-        if (overridesMap && overridesMap.has(key)) {
-          const rec = overridesMap.get(key);
-          rawStatus = (rec.status || '').trim();
-          if (rawStatus && rawStatus !== '출석') {
-            isPresent = false;
-            category = this.getCategoryFromRawStatus(rawStatus);
-          }
-        } else {
-          const sp = this.getSpecialMarkOnly(student, dateStr, showSpecialStudent);
-          if (sp.text && (sp.text.includes('자퇴') || sp.text.includes('위탁') || sp.text.includes('전출'))) {
-            isPresent = false;
-            rawStatus = sp.text;
-            category = 'drop';
-          }
-        }
-      } else {
-        const st = this.getEffectiveStudentPeriodStatus(student, dayOfWeek, p, dateStr, showSpecialStudent, overridesMap);
-        isPresent = st.isPresent;
-        rawStatus = st.rawStatus || st.text;
-        category = st.category || 'present';
-      }
-
-      return { period: p, isPresent, rawStatus, category };
+      const st = this.getEffectiveStudentPeriodStatus(student, dayOfWeek, p, dateStr, showSpecialStudent, overridesMap);
+      return {
+        period: p,
+        isPresent: st.isPresent,
+        rawStatus: st.rawStatus || st.text,
+        category: st.category || 'present'
+      };
     });
 
     const absentSessions = sessionResults.filter(s => !s.isPresent);
@@ -770,14 +748,138 @@ export const RollbookModel = {
   },
 
   /**
+   * Find contiguous streak of school days with the same absence reason/situation,
+   * skipping weekends and full-day holidays/events.
+   * Smartly bundles consecutive absence days within the week (and extends across weekends if overrides exist).
+   * @param {Object} student
+   * @param {string} targetDateStr 'YYYY-MM-DD'
+   * @param {Map} overridesMap
+   * @param {Object} holidaysMap
+   * @param {number} maxDays Max consecutive school days to bundle (default 5 days = 1 school week)
+   * @returns {Object|null}
+   */
+  findContiguousAbsenceRange(student, targetDateStr, overridesMap = null, holidaysMap = null, maxDays = 5) {
+    if (!student || !targetDateStr) return null;
+
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const dObj = new Date(targetDateStr + 'T12:00:00');
+    const targetDayOfWeek = isNaN(dObj.getDay()) ? '월' : dayNames[dObj.getDay()];
+
+    const baseReport = this.createAbsenceReportFromRollbook(student, targetDayOfWeek, targetDateStr, overridesMap);
+    if (!baseReport) return null;
+
+    const isMatch = (rep) => {
+      if (!rep) return false;
+      return rep.cat === baseReport.cat &&
+             rep.type === baseReport.type &&
+             (rep.subType || '') === (baseReport.subType || '');
+    };
+
+    const isWeekend = (dStr) => {
+      const d = new Date(dStr + 'T12:00:00');
+      const day = d.getDay();
+      return day === 0 || day === 6;
+    };
+
+    const isHoliday = (dStr) => {
+      return !!(holidaysMap && holidaysMap.fullDayEvents && holidaysMap.fullDayEvents[dStr]);
+    };
+
+    const shiftDate = (dStr, deltaDays) => {
+      const d = new Date(dStr + 'T12:00:00');
+      d.setDate(d.getDate() + deltaDays);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const getDayOfWeek = (dStr) => {
+      const d = new Date(dStr + 'T12:00:00');
+      return isNaN(d.getDay()) ? '' : dayNames[d.getDay()];
+    };
+
+    // Calculate current week boundaries (Monday ~ Friday)
+    const targetDay = dObj.getDay();
+    const diffToMon = (targetDay === 0 ? -6 : 1 - targetDay);
+    const monStr = shiftDate(targetDateStr, diffToMon);
+    const friStr = shiftDate(monStr, 4);
+
+    const matchedSchoolDays = [targetDateStr];
+
+    // 1. Scan backwards
+    let curr = targetDateStr;
+    while (matchedSchoolDays.length < maxDays) {
+      curr = shiftDate(curr, -1);
+      if (isWeekend(curr) || isHoliday(curr)) {
+        continue;
+      }
+      // If crossing into previous week, only continue if there is an explicit override
+      if (curr < monStr) {
+        const hasOverride = overridesMap && Array.from(overridesMap.keys()).some(k => k.startsWith(curr + '_') && k.endsWith('_' + student.studentId));
+        if (!hasOverride) break;
+      }
+
+      const dow = getDayOfWeek(curr);
+      if (!dow || dow === '토' || dow === '일') continue;
+
+      const rep = this.createAbsenceReportFromRollbook(student, dow, curr, overridesMap);
+      if (isMatch(rep)) {
+        matchedSchoolDays.unshift(curr);
+      } else {
+        break;
+      }
+    }
+
+    // 2. Scan forwards
+    curr = targetDateStr;
+    while (matchedSchoolDays.length < maxDays) {
+      curr = shiftDate(curr, 1);
+      if (isWeekend(curr) || isHoliday(curr)) {
+        continue;
+      }
+      // If crossing into next week, only continue if there is an explicit override
+      if (curr > friStr) {
+        const hasOverride = overridesMap && Array.from(overridesMap.keys()).some(k => k.startsWith(curr + '_') && k.endsWith('_' + student.studentId));
+        if (!hasOverride) break;
+      }
+
+      const dow = getDayOfWeek(curr);
+      if (!dow || dow === '토' || dow === '일') continue;
+
+      const rep = this.createAbsenceReportFromRollbook(student, dow, curr, overridesMap);
+      if (isMatch(rep)) {
+        matchedSchoolDays.push(curr);
+      } else {
+        break;
+      }
+    }
+
+    const startDate = matchedSchoolDays[0];
+    const endDate = matchedSchoolDays[matchedSchoolDays.length - 1];
+    const schoolDaysCount = matchedSchoolDays.length;
+    const totalDays = `${schoolDaysCount}일간`;
+
+    return {
+      ...baseReport,
+      startDate,
+      endDate,
+      totalDays,
+      schoolDaysCount,
+      schoolDays: matchedSchoolDays
+    };
+  },
+
+  /**
    * @param {Object} student
    * @param {string} dayOfWeek '월' | '화' | '수' | '목' | '금'
-   * @param {number} periodNum 1 to 7
+   * @param {number|string} periodOrSession 1 to 7, or '조', '종'
    * @param {string} dateStr 'YYYY-MM-DD'
    * @param {boolean} showSpecialStudent Whether to show special student marks
    */
-  getStudentPeriodStatus(student, dayOfWeek, periodNum, dateStr = null, showSpecialStudent = false) {
-    const pRemark = student.pRemark;
+  getStudentPeriodStatus(student, dayOfWeek, periodOrSession, dateStr = null, showSpecialStudent = false) {
+    if (!student) return { text: '', isShaded: false, is50Dark: false, isPresent: true, category: 'present' };
+    const pRemark = student.pRemark || '';
 
     // 1. 자퇴 / 위탁 / 전출 -> 50% dark shading for entire row, not present
     if (pRemark.includes('자퇴') || pRemark.includes('위탁') || pRemark.includes('전출')) {
@@ -802,13 +904,34 @@ export const RollbookModel = {
       return { text: '순', isShaded: true, is50Dark: false, isPresent: false, category: 'special' };
     }
 
-    // 5. Weekly recurring absence/early departure
+    // 5. Weekly recurring absence/early departure ('출결사항' 시트 연동)
     const att = student.weeklyAtt ? student.weeklyAtt[dayOfWeek] : null;
     if (att && att.type) {
       const type = att.type.trim();
       const time = (att.time || '').trim();
       const pMatch = time.match(/(\d)교시/);
-      const isApplicable = time.includes('결석') || (pMatch && periodNum >= parseInt(pMatch[1], 10)) || !time;
+
+      let isApplicable = false;
+      const isFullDay = time.includes('결석') || !time;
+      const isLateTime = time.includes('지각');
+
+      if (periodOrSession === '조') {
+        // '결석'이거나 '지각'인 경우 조회 불참
+        isApplicable = isFullDay || isLateTime;
+      } else if (periodOrSession === '종') {
+        // '결석'이거나 N교시 조퇴인 경우 종례 불참 (지각인 경우는 종례 참석)
+        isApplicable = isFullDay || (!!pMatch && !isLateTime);
+      } else {
+        // 일반 교시 (1~7)
+        const pNum = typeof periodOrSession === 'number' ? periodOrSession : parseInt(periodOrSession, 10);
+        if (isFullDay) {
+          isApplicable = true;
+        } else if (isLateTime && pMatch) {
+          isApplicable = pNum < parseInt(pMatch[1], 10);
+        } else if (pMatch) {
+          isApplicable = pNum >= parseInt(pMatch[1], 10);
+        }
+      }
 
       if (isApplicable) {
         // 출석인정(생결)
@@ -893,17 +1016,16 @@ export const RollbookModel = {
   },
 
   /**
-   * Get effective display remark combining base remark and attendance override remarks/daily summaries
+   * Get effective display remark combining base remark and attendance reasons (same simple format as moving rollbook)
    */
   getEffectiveDisplayRemark(pRemark, studentId, dateOrDays, overridesMap = null, showSpecialStudent = false, student = null) {
     const base = this.getDisplayRemark(pRemark, dateOrDays, showSpecialStudent);
-    if (!overridesMap || !studentId || !dateOrDays) return base;
+    if (!studentId || !dateOrDays) return base;
 
     const dayList = Array.isArray(dateOrDays)
       ? dateOrDays
       : [dateOrDays];
 
-    const dailySummaries = [];
     const extraRemarks = new Set();
 
     dayList.forEach(dayItem => {
@@ -911,41 +1033,33 @@ export const RollbookModel = {
       const dayOfWeek = (dayItem && dayItem.dayOfWeek) || (dStr ? AcademicConfig.getDayOfWeek(dStr) : '');
       if (!dStr) return;
 
-      if (student && dayOfWeek) {
-        const analysis = this.analyzeDailyAttendance(student, dayOfWeek, dStr, overridesMap, showSpecialStudent);
-        if (!analysis.isNormal && analysis.summary) {
-          const prefix = dayList.length > 1 ? `${dayOfWeek}:` : '';
-          dailySummaries.push(`${prefix}${analysis.summary}`);
-          return;
-        }
+      // Check session-level overrides for remark text ('생리', '체험', '경조사', '전염병')
+      if (overridesMap) {
+        const checkPeriods = ['조', 1, 2, 3, 4, 5, 6, 7, '종'];
+        checkPeriods.forEach(p => {
+          const key = `${dStr}_${p}_${studentId}`;
+          if (overridesMap.has(key)) {
+            const rec = overridesMap.get(key);
+            const rText = this.getStatusRemarkText(rec.status);
+            if (rText) extraRemarks.add(rText);
+          }
+        });
       }
 
-      // Fallback: check session-level overrides for remark text ('생리', '체험', '경조사', '전염병')
-      const checkPeriods = ['조', 1, 2, 3, 4, 5, 6, 7, '종'];
-      checkPeriods.forEach(p => {
-        const key = `${dStr}_${p}_${studentId}`;
-        if (overridesMap.has(key)) {
-          const rec = overridesMap.get(key);
-          const rText = this.getStatusRemarkText(rec.status);
+      // Check weekly recurring attendance for remark text ('생리', '체험', '경조사', '전염병')
+      if (student && student.weeklyAtt && dayOfWeek) {
+        const att = student.weeklyAtt[dayOfWeek];
+        if (att && att.type) {
+          const rText = this.getStatusRemarkText(att.type);
           if (rText) extraRemarks.add(rText);
         }
-      });
+      }
     });
 
-    const combinedExtra = [];
-    if (dailySummaries.length > 0) {
-      combinedExtra.push(...dailySummaries);
-    } else if (extraRemarks.size > 0) {
-      combinedExtra.push(Array.from(extraRemarks).join(', '));
-    }
-
-    if (combinedExtra.length > 0) {
-      const extraStr = combinedExtra.join(', ');
-      if (base) {
-        if (base.includes(extraStr)) return base;
-        return `${base}, ${extraStr}`;
-      }
-      return extraStr;
+    const extraList = Array.from(extraRemarks).filter(r => !base.includes(r));
+    if (extraList.length > 0) {
+      const extraStr = extraList.join(', ');
+      return base ? `${base}, ${extraStr}` : extraStr;
     }
 
     return base;

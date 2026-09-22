@@ -295,8 +295,30 @@
         <button type="button" class="modal-close-btn" id="closeAqeModalBtn">&times;</button>
       </div>
       <div class="modal-body">
-        <div style="background: #eef4ff; border: 1px solid #c9dafc; border-radius: 6px; padding: 10px 12px; margin-bottom: 15px; font-size: 13px; color: #1a4299;">
+        <div style="background: #eef4ff; border: 1px solid #c9dafc; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; color: #1a4299;">
           💡 <strong>출석부 자동 분석 완료:</strong> 필요 시 내용을 수정한 후 인쇄하실 수 있습니다.
+        </div>
+        <div id="aqeStreakNotice" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 9px 12px; margin-bottom: 12px; font-size: 12.5px; color: #15803d; line-height: 1.4;"></div>
+        <div id="aqePrintModeWrap" style="display: none; background: #fff; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.08);">
+          <div style="font-size: 12.5px; font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>🖨️</span> <span>인쇄 방식 선택 (연속 출결 감지됨)</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 4px; background: #eff6ff;" id="aqeModeCombinedLabel">
+              <input type="radio" name="aqePrintMode" id="aqeModeCombined" value="combined" checked style="cursor: pointer; width: 16px; height: 16px;" />
+              <div>
+                <strong style="color: #1d4ed8;">날짜 범위를 묶어 1장으로 통합 인쇄 (권장)</strong>
+                <div style="font-size: 11.5px; color: #475569;" id="aqeModeCombinedDesc">예: 2026-09-21 ~ 2026-09-23 (3일간) → 1장 출력</div>
+              </div>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 4px;" id="aqeModeIndividualLabel">
+              <input type="radio" name="aqePrintMode" id="aqeModeIndividual" value="individual" style="cursor: pointer; width: 16px; height: 16px;" />
+              <div>
+                <strong style="color: #334155;">각 날짜별로 1장씩 분할 인쇄</strong>
+                <div style="font-size: 11.5px; color: #475569;" id="aqeModeIndividualDesc">예: 각 일자별 1일간 → 총 N장 분할 출력</div>
+              </div>
+            </label>
+          </div>
         </div>
         <div class="row" style="display: flex; gap: 10px; margin-bottom: 12px;">
           <div style="flex: 1;">
@@ -330,12 +352,22 @@
         </div>
         <div class="row" style="display: flex; gap: 10px; margin-bottom: 12px;">
           <div style="flex: 1;">
-            <label class="modal-label">기간:</label>
+            <label class="modal-label">시작일:</label>
             <input type="date" id="aqeStartDate" class="styled-input" />
           </div>
           <div style="flex: 1;">
-            <label class="modal-label">교시 범위:</label>
-            <input type="text" id="aqePeriods" class="styled-input" placeholder="예: 1교시 ~ 7교시" />
+            <label class="modal-label">종료일:</label>
+            <input type="date" id="aqeEndDate" class="styled-input" />
+          </div>
+        </div>
+        <div class="row" style="display: flex; gap: 10px; margin-bottom: 12px;">
+          <div style="flex: 1;">
+            <label class="modal-label">총 기간 표기:</label>
+            <input type="text" id="aqeTotalDays" class="styled-input" placeholder="예: 1일간, 3일간" />
+          </div>
+          <div style="flex: 1;">
+            <label class="modal-label">교시 범위 (지각·조퇴·결과):</label>
+            <input type="text" id="aqePeriods" class="styled-input" placeholder="예: 1교시 ~ 6교시" />
           </div>
         </div>
         <div style="margin-bottom: 12px;">
