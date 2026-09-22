@@ -78,7 +78,7 @@ export const AbsenceRegistryView = {
         parentSigUrl: line[34] || '',
         pdfUrl: line[35] || '',
         printedAt: line[38] || '',
-        subType: line[37] || ''
+        subType: (line[37] && !line[37].startsWith('#') && line[37] !== 'TRUE' && line[37] !== 'FALSE') ? line[37].trim() : ''
       });
     }
 
